@@ -1,0 +1,1395 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sudoku</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── Base (normal-mode) palette ── */
+    :root {
+      --bg:          #f8f6f2;
+      --surface:     #ffffff;
+      --border:      #ddd8d0;
+      --border-box:  #c8c2b8;
+      --text:        #3a3530;
+      --muted:       #9a948e;
+      --accent:      #b5c4e8;
+      --accent-deep: #5c6bc0;
+      --accent2:     #c8e6c9;
+      --accent2-deep:#2e7d32;
+      --error:       #f8bbd0;
+      --error-txt:   #c2185b;
+      --given:       #3a3530;
+      --filled:      #5c6bc0;
+      --filled-bg:   #eef1fb;
+      --highlight:   #e8f0fe;
+      --same-num:    #d4e1fc;
+      --cell-size:   clamp(42px, 9.2vw, 60px);
+    }
+
+    /* ── Challenge-mode palette (applied to body) ── */
+    body.challenge {
+      --accent:      #aed6ae;
+      --accent-deep: #2e7d32;
+      --accent2:     #81c784;
+      --accent2-deep:#1b5e20;
+      --filled:      #2e7d32;
+      --filled-bg:   #f1f8f1;
+      --highlight:   #e8f5e8;
+      --same-num:    #c5e8c5;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* every top-level screen is a centred column */
+    .screen {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+    }
+
+    /* ════════════════════════════════════════
+       USERNAME SCREEN
+    ════════════════════════════════════════ */
+    #screen-username {
+      justify-content: center;
+      padding: 2rem 1.5rem;
+      gap: 0;
+    }
+
+    #screen-username h1 {
+      font-size: 2rem;
+      font-weight: 300;
+      letter-spacing: 0.22em;
+      text-transform: uppercase;
+      margin-bottom: 0.4rem;
+      text-align: center;
+    }
+
+    .tagline {
+      font-size: 0.76rem;
+      color: var(--muted);
+      letter-spacing: 0.08em;
+      text-align: center;
+      margin-bottom: 3rem;
+    }
+
+    .username-card {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 2rem 2rem 1.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      width: 100%;
+      max-width: 320px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.05);
+    }
+
+    .username-card label {
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .username-card input[type="text"] {
+      padding: 0.6rem 0.9rem;
+      border: 1.5px solid var(--border);
+      border-radius: 8px;
+      font-family: inherit;
+      font-size: 1rem;
+      font-weight: 300;
+      color: var(--text);
+      background: var(--bg);
+      outline: none;
+      transition: border-color 0.15s;
+      letter-spacing: 0.03em;
+    }
+    .username-card input[type="text"]:focus { border-color: var(--accent); background: #fff; }
+
+    .username-card .primary-btn {
+      padding: 0.6rem;
+      border-radius: 999px;
+      border: none;
+      background: var(--accent);
+      font-family: inherit;
+      font-size: 0.85rem;
+      font-weight: 500;
+      color: var(--text);
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .username-card .primary-btn:hover { opacity: 0.8; }
+
+    .name-error {
+      font-size: 0.72rem;
+      color: var(--error-txt);
+      text-align: center;
+      min-height: 1em;
+    }
+
+    /* ════════════════════════════════════════
+       MENU SCREEN
+    ════════════════════════════════════════ */
+    #screen-menu {
+      padding: 3rem 1.5rem 4rem;
+      gap: 0;
+    }
+
+    #screen-menu h1 {
+      font-size: 1.9rem;
+      font-weight: 300;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      margin-bottom: 0.3rem;
+    }
+
+    #screen-menu .tagline { margin-bottom: 0.5rem; }
+
+    .welcome-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 0.6rem;
+    }
+
+    .welcome-name {
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+
+    .time-master-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 2rem;
+      height: 2.4rem;
+      background: linear-gradient(160deg, #4a90e2 0%, #1a5fc8 100%);
+      clip-path: polygon(0 0, 100% 0, 100% 72%, 50% 100%, 0 72%);
+      color: #fff;
+      font-size: 0.95rem;
+      cursor: default;
+      line-height: 1;
+      flex-shrink: 0;
+      filter: drop-shadow(0 2px 4px rgba(26,95,200,0.35));
+    }
+
+    .player-level {
+      font-size: 0.76rem;
+      color: var(--muted);
+      margin-bottom: 2rem;
+      letter-spacing: 0.03em;
+    }
+    .player-level strong { color: var(--text); font-weight: 500; }
+
+    .change-name-btn {
+      font-size: 0.72rem;
+      color: var(--muted);
+      background: none;
+      border: none;
+      cursor: pointer;
+      padding: 0;
+      text-decoration: underline;
+      font-family: inherit;
+      transition: color 0.15s;
+    }
+    .change-name-btn:hover { color: var(--text); }
+
+    .mode-cards {
+      display: flex;
+      gap: 1.2rem;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-bottom: 1.5rem;
+    }
+
+    .mode-card {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: 14px;
+      padding: 1.6rem 1.4rem 1.4rem;
+      width: 210px;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.04);
+      transition: box-shadow 0.15s;
+    }
+    .mode-card:hover { box-shadow: 0 4px 16px rgba(0,0,0,0.08); }
+
+    .mode-card.normal-card    { border-top: 3px solid #b5c4e8; }
+    .mode-card.challenge-card { border-top: 3px solid #aed6ae; }
+
+    .mode-icon { font-size: 1.4rem; margin-bottom: 0.2rem; }
+    .mode-name { font-size: 0.95rem; font-weight: 500; letter-spacing: 0.04em; }
+    .mode-desc { font-size: 0.74rem; color: var(--muted); line-height: 1.55; flex: 1; }
+    .mode-meta {
+      font-size: 0.7rem;
+      color: var(--muted);
+      background: var(--bg);
+      border-radius: 6px;
+      padding: 0.35rem 0.6rem;
+      line-height: 1.7;
+    }
+    .mode-meta span { display: block; }
+
+    .card-btn {
+      margin-top: 0.4rem;
+      padding: 0.5rem;
+      border-radius: 999px;
+      border: none;
+      font-family: inherit;
+      font-size: 0.8rem;
+      font-weight: 500;
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .card-btn:hover { opacity: 0.8; }
+    .normal-card    .card-btn { background: #b5c4e8; color: #2a3060; }
+    .challenge-card .card-btn { background: #aed6ae; color: #1a4a1a; }
+
+    .continue-btn {
+      padding: 0.55rem 1.6rem;
+      border-radius: 999px;
+      border: 1.5px solid var(--border-box);
+      background: var(--surface);
+      font-family: inherit;
+      font-size: 0.8rem;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .continue-btn:hover { border-color: #b5c4e8; color: var(--text); }
+
+    /* ════════════════════════════════════════
+       GAME SCREEN
+    ════════════════════════════════════════ */
+    #screen-game {
+      padding: 0 1rem 3rem;
+    }
+
+    .game-header {
+      width: 100%;
+      max-width: calc(var(--cell-size) * 9 + 4px);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 0 1.1rem;
+      position: relative;
+      z-index: 50;
+    }
+
+    .hdr-left, .hdr-right {
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+
+    .icon-btn {
+      background: none;
+      border: 1.5px solid var(--border);
+      border-radius: 999px;
+      font-family: inherit;
+      font-size: 0.75rem;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 0.3rem 0.75rem;
+      transition: all 0.15s;
+    }
+    .icon-btn:hover { border-color: var(--accent); color: var(--text); }
+
+    .mode-badge {
+      font-size: 0.7rem;
+      font-weight: 500;
+      letter-spacing: 0.07em;
+      text-transform: uppercase;
+      padding: 0.25rem 0.7rem;
+      border-radius: 999px;
+      background: var(--accent);
+      color: var(--text);
+    }
+
+    /* ── Difficulty bar ── */
+    .diff-bar {
+      display: flex;
+      gap: 0.4rem;
+      margin-bottom: 1.1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+
+    .diff-btn {
+      padding: 0.38rem 0.9rem;
+      border-radius: 999px;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      font-family: inherit;
+      font-size: 0.76rem;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .diff-btn.locked  { opacity: 0.38; cursor: not-allowed; }
+    .diff-btn.active  { background: var(--accent); border-color: var(--accent); color: var(--text); font-weight: 500; }
+    .diff-btn:not(.locked):not(.active):hover { border-color: var(--accent); color: var(--text); }
+
+    .pip { display: inline-flex; gap: 2px; margin-left: 5px; vertical-align: middle; }
+    .pip span { width: 4px; height: 4px; border-radius: 50%; background: var(--accent2); display: inline-block; }
+    .pip span.empty { background: var(--border); }
+
+    /* ── Progress row ── */
+    .progress-row {
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      margin-bottom: 1rem;
+      font-size: 0.74rem;
+      color: var(--muted);
+    }
+    .progress-dots { display: flex; gap: 5px; }
+    .progress-dots .dot {
+      width: 9px; height: 9px;
+      border-radius: 50%;
+      border: 1.5px solid var(--border-box);
+      background: var(--surface);
+      transition: background 0.35s;
+    }
+    .progress-dots .dot.filled { background: var(--accent2); border-color: var(--accent-deep); }
+
+    /* ── Stats row ── */
+    .stats-row {
+      display: flex;
+      gap: 2rem;
+      margin-bottom: 1.1rem;
+      font-size: 0.74rem;
+      color: var(--muted);
+    }
+    .stat { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+    .stat strong { font-size: 1.05rem; font-weight: 500; color: var(--text); transition: color 0.3s; }
+    .stat strong.warn { color: #e67e22; }
+    .stat strong.crit { color: #c0392b; }
+
+    /* ── Lives ── */
+    .lives { display: flex; gap: 5px; align-items: center; }
+    .heart { font-size: 1rem; transition: opacity 0.3s; }
+    .heart.lost { opacity: 0.18; }
+
+    /* ── Board ── */
+    .board-wrap { position: relative; }
+
+    .board {
+      display: grid;
+      grid-template-columns: repeat(9, var(--cell-size));
+      grid-template-rows:    repeat(9, var(--cell-size));
+      border: 2px solid var(--border-box);
+      border-radius: 6px;
+      overflow: hidden;
+      background: var(--surface);
+      box-shadow: 0 2px 16px rgba(0,0,0,0.06);
+      user-select: none;
+    }
+
+    .cell {
+      width: var(--cell-size); height: var(--cell-size);
+      display: flex; align-items: center; justify-content: center;
+      font-size: calc(var(--cell-size) * 0.42);
+      font-weight: 400;
+      cursor: pointer;
+      border: 1px solid var(--border);
+      transition: background 0.1s;
+      position: relative;
+    }
+    .cell[data-col="2"], .cell[data-col="5"] { border-right: 2px solid var(--border-box); }
+    .cell[data-row="2"], .cell[data-row="5"] { border-bottom: 2px solid var(--border-box); }
+
+    .cell.given     { color: var(--given); font-weight: 500; }
+    .cell.filled    { color: var(--filled); background: var(--filled-bg); }
+    .cell.selected  { background: var(--accent) !important; }
+    .cell.highlight { background: var(--highlight); }
+    .cell.same-num  { background: var(--same-num); }
+    .cell.err-flash { background: var(--error) !important; color: var(--error-txt) !important; }
+
+    .cell .notes {
+      position: absolute; inset: 1px;
+      display: grid;
+      grid-template-columns: repeat(3,1fr);
+      grid-template-rows: repeat(3,1fr);
+      pointer-events: none;
+    }
+    .cell .notes span {
+      font-size: calc(var(--cell-size) * 0.21);
+      color: var(--muted);
+      display: flex; align-items: center; justify-content: center;
+      line-height: 1;
+    }
+
+    /* ── Board overlays (win/loss/pause/generating) ── */
+    .board-overlay {
+      position: absolute; inset: 0;
+      background: rgba(248,246,242,0.94);
+      border-radius: 6px;
+      display: none;
+      flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 0.65rem;
+      backdrop-filter: blur(3px);
+      z-index: 20;
+    }
+    .board-overlay.visible { display: flex; }
+
+    .board-overlay h2 { font-size: 1.2rem; font-weight: 500; letter-spacing: 0.04em; text-align: center; }
+    .board-overlay p  { font-size: 0.78rem; color: var(--muted); text-align: center; max-width: 240px; line-height: 1.5; }
+
+    .ov-unlock { font-size: 0.78rem !important; color: var(--accent2-deep) !important; font-weight: 500; }
+    .ov-sub    { font-size: 0.82rem !important; color: var(--text) !important; max-width: 220px !important; }
+    .ov-prog   { font-size: 0.72rem !important; }
+
+    .result-stats {
+      display: flex; gap: 2rem; margin: 0.15rem 0;
+    }
+    .rstat { display: flex; flex-direction: column; align-items: center; gap: 1px; }
+    .rstat-val { font-size: 1.1rem; font-weight: 500; color: var(--text); }
+    .rstat-lbl { font-size: 0.66rem; color: var(--muted); }
+
+    .btn-row { display: flex; gap: 0.5rem; margin-top: 0.3rem; flex-wrap: wrap; justify-content: center; }
+
+    .obtn {
+      padding: 0.45rem 1.2rem;
+      border-radius: 999px;
+      border: 1.5px solid var(--border-box);
+      background: var(--surface);
+      font-family: inherit;
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--text);
+      cursor: pointer;
+      transition: opacity 0.15s;
+    }
+    .obtn.primary { background: var(--accent); border-color: var(--accent); }
+    .obtn:hover   { opacity: 0.78; }
+
+    .gen-msg { font-size: 0.78rem; color: var(--muted); letter-spacing: 0.06em; }
+
+    /* ── Number pad ── */
+    .numpad {
+      display: flex; gap: 0.38rem;
+      margin-top: 1.1rem;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .num-btn {
+      width: var(--cell-size);
+      height: calc(var(--cell-size) * 0.8);
+      border-radius: 8px;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      font-family: inherit;
+      font-size: calc(var(--cell-size) * 0.36);
+      color: var(--text);
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+    .num-btn:hover     { background: var(--highlight); border-color: var(--accent); }
+    .num-btn.exhausted { opacity: 0.18; pointer-events: none; }
+
+    /* ── Tool row ── */
+    .tool-row {
+      display: flex; gap: 0.45rem;
+      margin-top: 0.65rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .tool-btn {
+      padding: 0.35rem 0.8rem;
+      border-radius: 999px;
+      border: 1.5px solid var(--border);
+      background: var(--surface);
+      font-family: inherit;
+      font-size: 0.72rem;
+      color: var(--muted);
+      cursor: pointer;
+      transition: all 0.12s;
+    }
+    .tool-btn:hover  { border-color: var(--accent); color: var(--text); }
+    .tool-btn.active { background: var(--accent2); border-color: var(--accent-deep); color: var(--text); }
+
+    @media (max-width: 500px) {
+      .mode-cards { gap: 1rem; }
+      .mode-card  { width: 100%; max-width: 290px; }
+      .stats-row  { gap: 1.25rem; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ SCREEN 1 · Username ══ -->
+<div id="screen-username" class="screen">
+  <h1>Sudoku</h1>
+  <p class="tagline">clear your mind, one number at a time</p>
+  <div class="username-card">
+    <label for="nameInput">What should we call you?</label>
+    <input type="text" id="nameInput" placeholder="your name" maxlength="20" autocomplete="off" />
+    <span class="name-error" id="nameError"></span>
+    <button class="primary-btn" id="btnSetName">Let's play →</button>
+  </div>
+</div>
+
+<!-- ══ SCREEN 2 · Menu ══ -->
+<div id="screen-menu" class="screen" style="display:none">
+  <h1>Sudoku</h1>
+  <p class="tagline">clear your mind, one number at a time</p>
+  <div class="welcome-row">
+    <span class="welcome-name" id="welcomeMsg"></span>
+    <span class="time-master-badge" id="timeMasterBadge" style="display:none" title="Time Master of Sudoku">⚡</span>
+    <button class="change-name-btn" id="btnChangeName">change name</button>
+  </div>
+  <p class="player-level" id="playerLevelDisplay"></p>
+  <div class="mode-cards">
+    <div class="mode-card normal-card">
+      <div class="mode-icon">◇</div>
+      <div class="mode-name">Normal</div>
+      <div class="mode-desc">Play at your own pace. Your game saves automatically so you can leave and come back anytime.</div>
+      <div class="mode-meta">
+        <span>♥ 3 lives per puzzle</span>
+        <span>★ Win 3× to unlock next level</span>
+      </div>
+      <button class="card-btn" id="btnPlayNormal">Play</button>
+    </div>
+    <div class="mode-card challenge-card">
+      <div class="mode-icon">⏱</div>
+      <div class="mode-name">Time Challenge</div>
+      <div class="mode-desc">Race against the clock. One mistake and it's over — one win unlocks the next level.</div>
+      <div class="mode-meta">
+        <span>Beginner · 8 min</span>
+        <span>Intermediate · 7 min</span>
+        <span>Advanced · 6 min</span>
+        <span>Master · 5 min</span>
+      </div>
+      <button class="card-btn" id="btnPlayChallenge">Play</button>
+    </div>
+  </div>
+  <button class="continue-btn" id="btnContinue" style="display:none">↺ Continue Normal Game</button>
+</div>
+
+<!-- ══ SCREEN 3 · Game ══ -->
+<div id="screen-game" class="screen" style="display:none">
+
+  <div class="game-header">
+    <div class="hdr-left">
+      <button class="icon-btn" id="btnBack">← Menu</button>
+    </div>
+    <span class="mode-badge" id="modeBadge">Normal</span>
+    <div class="hdr-right">
+      <button class="icon-btn" id="btnPause">⏸ Pause</button>
+    </div>
+  </div>
+
+  <div class="diff-bar" id="diffBar"></div>
+
+  <div class="progress-row">
+    <span>level progress</span>
+    <div class="progress-dots" id="progressDots"></div>
+    <span id="progressLabel"></span>
+  </div>
+
+  <div class="stats-row">
+    <div class="stat">
+      <strong id="timerDisplay">0:00</strong>
+      <span id="timerLabel">time</span>
+    </div>
+    <div class="stat">
+      <div class="lives">
+        <span class="heart" id="h0">♥</span>
+        <span class="heart" id="h1">♥</span>
+        <span class="heart" id="h2">♥</span>
+      </div>
+      <span>lives</span>
+    </div>
+    <div class="stat">
+      <strong id="errCount">0</strong>
+      <span>errors</span>
+    </div>
+  </div>
+
+  <div class="board-wrap">
+    <div class="board" id="board"></div>
+
+    <!-- generating overlay -->
+    <div class="board-overlay" id="ovGen">
+      <span class="gen-msg">generating puzzle…</span>
+    </div>
+
+    <!-- win / loss overlay -->
+    <div class="board-overlay" id="ovResult"></div>
+
+    <!-- pause overlay -->
+    <div class="board-overlay" id="ovPause">
+      <h2>⏸ Paused</h2>
+      <p id="pauseUser"></p>
+      <div class="btn-row">
+        <button class="obtn primary" id="btnResume">Resume</button>
+        <button class="obtn" id="btnPauseMenu">← Menu</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="numpad" id="numpad"></div>
+
+  <div class="tool-row">
+    <button class="tool-btn" id="btnErase">⌫ erase</button>
+    <button class="tool-btn" id="btnNotes">✎ notes</button>
+    <button class="tool-btn" id="btnHint">⚡ hint</button>
+    <button class="tool-btn" id="btnNew">↺ new</button>
+  </div>
+
+</div>
+
+<script>
+// ─── Sudoku Generator ────────────────────────────────────────────────────────
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function generateSolution() {
+  const g = Array.from({length: 9}, () => Array(9).fill(0));
+  function ok(r, c, n) {
+    for (let i = 0; i < 9; i++) if (g[r][i] === n || g[i][c] === n) return false;
+    const br = Math.floor(r/3)*3, bc = Math.floor(c/3)*3;
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) if (g[br+i][bc+j] === n) return false;
+    return true;
+  }
+  function fill(pos) {
+    if (pos === 81) return true;
+    const r = Math.floor(pos/9), c = pos%9;
+    for (const n of shuffle([1,2,3,4,5,6,7,8,9]))
+      if (ok(r,c,n)) { g[r][c]=n; if (fill(pos+1)) return true; g[r][c]=0; }
+    return false;
+  }
+  fill(0);
+  return g;
+}
+
+const CLUES = { beginner:46, intermediate:36, advanced:28, master:22 };
+
+function countSolutions(grid, limit=2) {
+  const g = grid.map(r=>[...r]);
+  let count = 0;
+  function ok(r,c,n) {
+    for (let i=0;i<9;i++) if (g[r][i]===n||g[i][c]===n) return false;
+    const br=Math.floor(r/3)*3, bc=Math.floor(c/3)*3;
+    for (let i=0;i<3;i++) for (let j=0;j<3;j++) if (g[br+i][bc+j]===n) return false;
+    return true;
+  }
+  function solve() {
+    let best=-1, bestC=-1, mo=10;
+    for (let r=0;r<9;r++) for (let c=0;c<9;c++) {
+      if (g[r][c]) continue;
+      let opts=0;
+      for (let n=1;n<=9;n++) if (ok(r,c,n)) opts++;
+      if (!opts) return;
+      if (opts<mo) { mo=opts; best=r; bestC=c; }
+    }
+    if (best===-1) { count++; return; }
+    for (let n=1;n<=9;n++) if (ok(best,bestC,n)) {
+      g[best][bestC]=n; solve(); g[best][bestC]=0;
+      if (count>=limit) return;
+    }
+  }
+  solve();
+  return count;
+}
+
+function makePuzzle(difficulty) {
+  const solution = generateSolution();
+  const puzzle   = solution.map(r=>[...r]);
+  const target   = CLUES[difficulty];
+  let   filled   = 81;
+  for (const pos of shuffle([...Array(81).keys()])) {
+    if (filled <= target) break;
+    const r=Math.floor(pos/9), c=pos%9, bk=puzzle[r][c];
+    puzzle[r][c]=0;
+    if (countSolutions(puzzle)===1) filled--;
+    else puzzle[r][c]=bk;
+  }
+  return { puzzle, solution };
+}
+
+// ─── Constants ───────────────────────────────────────────────────────────────
+
+const DIFFICULTIES  = ['beginner','intermediate','advanced','master'];
+const LABELS        = ['Beginner','Intermediate','Advanced','Master'];
+const TIME_LIMITS   = { beginner:480, intermediate:420, advanced:360, master:300 };
+const WINS_REQUIRED = { normal:3, challenge:1 };
+const PROG_KEYS     = { normal:'sudoku_prog_normal', challenge:'sudoku_prog_challenge' };
+const SAVE_KEY      = 'sudoku_save';
+const NAME_KEY      = 'sudoku_username';
+
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+
+const $  = id => document.getElementById(id);
+const el = (tag,cls) => { const e=document.createElement(tag); if(cls) e.className=cls; return e; };
+
+function formatTime(s) {
+  return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+}
+
+// ─── Storage (in-memory primary, localStorage sync) ──────────────────────────
+// _mem is always the source of truth. localStorage is a best-effort persistence
+// layer — if it throws (private browsing, file://, quota) we carry on unaffected.
+
+const _mem = {};
+
+function _store(key, val) {
+  _mem[key] = val;
+  try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {}
+}
+function _load(key) {
+  if (key in _mem) return _mem[key];
+  try {
+    const raw = localStorage.getItem(key);
+    if (raw !== null) {
+      let v; try { v = JSON.parse(raw); } catch { v = raw; }
+      _mem[key] = v; return v;
+    }
+  } catch(e) {}
+  return null;
+}
+function _forget(key) {
+  delete _mem[key];
+  try { localStorage.removeItem(key); } catch(e) {}
+}
+
+// ─── Progress ────────────────────────────────────────────────────────────────
+
+function loadProg(mode)   { return _load(PROG_KEYS[mode]) || {}; }
+function saveProg(mode,p) { _store(PROG_KEYS[mode], p); }
+
+function getWins(mode,diff) { return Math.min(loadProg(mode)[diff]||0, WINS_REQUIRED[mode]); }
+function isUnlocked(mode,diff) {
+  const idx = DIFFICULTIES.indexOf(diff);
+  if (idx===0) return true;
+  return getWins(mode, DIFFICULTIES[idx-1]) >= WINS_REQUIRED[mode];
+}
+
+// ─── Save / resume (normal only) ─────────────────────────────────────────────
+
+function serializeBoard(board) {
+  return board.map(row=>row.map(cd=>({ value:cd.value, given:cd.given, notes:[...cd.notes] })));
+}
+function deserializeBoard(data) {
+  return data.map(row=>row.map(cd=>({ value:cd.value, given:cd.given, notes:new Set(cd.notes) })));
+}
+function persistGame() {
+  if (st.gameMode !== 'normal' || !st.board || st.solved || st.lost) {
+    _forget(SAVE_KEY); return;
+  }
+  _store(SAVE_KEY, {
+    difficulty: st.difficulty, board: serializeBoard(st.board),
+    puzzle: st.puzzle, solution: st.solution,
+    elapsed: st.elapsed, errors: st.errors, lives: st.lives,
+  });
+}
+function hasSave() {
+  const d = _load(SAVE_KEY); return !!(d && d.board);
+}
+function loadSave() {
+  const d = _load(SAVE_KEY);
+  if (!d) return false;
+  try {
+    st.gameMode=d.mode||'normal'; st.difficulty=d.difficulty;
+    st.board=deserializeBoard(d.board); st.puzzle=d.puzzle; st.solution=d.solution;
+    st.elapsed=d.elapsed; st.errors=d.errors; st.lives=d.lives;
+    st.selected=null; st.noteMode=false; st.solved=false; st.lost=false; st.paused=false;
+    return true;
+  } catch { return false; }
+}
+
+// ─── Game State ───────────────────────────────────────────────────────────────
+
+const st = {
+  username:      '',
+  gameMode:      null,
+  difficulty:    'beginner',
+  puzzle:        null,
+  solution:      null,
+  board:         null,
+  selected:      null,
+  errors:        0,
+  lives:         3,
+  noteMode:      false,
+  solved:        false,
+  lost:          false,
+  paused:        false,
+  timerInterval: null,
+  elapsed:       0,
+};
+
+// ─── Screen switching ─────────────────────────────────────────────────────────
+
+function showScreen(id) {
+  ['screen-username','screen-menu','screen-game'].forEach(s =>
+    $(s).style.display = s===id ? 'flex' : 'none'
+  );
+}
+
+// ─── Username screen ──────────────────────────────────────────────────────────
+
+function goUsername() {
+  clearInterval(st.timerInterval);
+  showScreen('screen-username');
+  $('nameInput').value = '';
+  setTimeout(()=>$('nameInput').focus(), 50);
+}
+
+function submitUsername() {
+  const name = $('nameInput').value.trim();
+  if (!name) {
+    $('nameError').textContent = 'Please enter a name to continue.';
+    $('nameInput').focus();
+    return;
+  }
+  $('nameError').textContent = '';
+  st.username = name;
+  _store(NAME_KEY, name);
+  goMenu();
+}
+
+$('btnSetName').addEventListener('click', () => submitUsername());
+$('nameInput').addEventListener('keydown', e => { if (e.key === 'Enter') submitUsername(); });
+$('nameInput').addEventListener('input', () => { $('nameError').textContent = ''; });
+
+// ─── Menu screen ──────────────────────────────────────────────────────────────
+
+function getPlayerLevel() {
+  let level = LABELS[0];
+  for (const d of DIFFICULTIES) {
+    if (isUnlocked('normal', d)) level = LABELS[DIFFICULTIES.indexOf(d)];
+    else break;
+  }
+  if (getWins('normal', 'master') >= WINS_REQUIRED['normal']) level = 'Sudoku Master';
+  return level;
+}
+
+function goMenu() {
+  clearInterval(st.timerInterval);
+  document.body.classList.remove('challenge');
+  $('welcomeMsg').textContent = `Welcome, ${st.username}!`;
+  $('timeMasterBadge').style.display = _load('sudoku_time_master') ? 'inline' : 'none';
+  $('playerLevelDisplay').innerHTML = `Player Level: <strong>${getPlayerLevel()}</strong>`;
+  $('btnContinue').style.display = hasSave() ? 'inline-block' : 'none';
+  showScreen('screen-menu');
+}
+
+$('btnChangeName').addEventListener('click', goUsername);
+
+$('btnPlayNormal').addEventListener('click', () => {
+  st.gameMode   = 'normal';
+  st.difficulty = bestDiff('normal');
+  newGame();
+});
+
+$('btnPlayChallenge').addEventListener('click', () => {
+  st.gameMode   = 'challenge';
+  st.difficulty = bestDiff('challenge');
+  newGame();
+});
+
+$('btnContinue').addEventListener('click', () => {
+  if (!loadSave()) return;
+  st.gameMode = 'normal';
+  showScreen('screen-game');
+  applyTheme();
+  renderAll();
+  startTimer();
+});
+
+function bestDiff(mode) {
+  let best='beginner';
+  for (const d of DIFFICULTIES) { if (isUnlocked(mode,d)) best=d; else break; }
+  return best;
+}
+
+// ─── Game screen: start / new ─────────────────────────────────────────────────
+
+function newGame() {
+  clearInterval(st.timerInterval);
+  st.errors=0; st.lives=st.gameMode==='challenge' ? 1 : 3; st.selected=null; st.noteMode=false;
+  st.solved=false; st.lost=false; st.paused=false; st.elapsed=0;
+  st.board=null; st.puzzle=null; st.solution=null;
+
+  showScreen('screen-game');
+  applyTheme();
+  hideAllOverlays();
+  $('btnNotes').classList.remove('active');
+  renderAll();
+  showOverlay('gen');
+
+  // Generate asynchronously so the UI can paint first
+  setTimeout(() => {
+    const { puzzle, solution } = makePuzzle(st.difficulty);
+    st.puzzle   = puzzle;
+    st.solution = solution;
+    st.board    = Array.from({length:9},(_,r)=>
+      Array.from({length:9},(_,c)=>({
+        value: puzzle[r][c]||0, given: puzzle[r][c]!==0, notes: new Set()
+      }))
+    );
+    hideAllOverlays();
+    renderAll();
+    startTimer();
+  }, 40);
+}
+
+function applyTheme() {
+  document.body.classList.toggle('challenge', st.gameMode==='challenge');
+  $('modeBadge').textContent = st.gameMode==='challenge' ? 'Time Challenge' : 'Normal';
+}
+
+// ─── Timer ───────────────────────────────────────────────────────────────────
+
+function startTimer() {
+  clearInterval(st.timerInterval);
+  st.timerInterval = setInterval(tickTimer, 1000);
+}
+
+function tickTimer() {
+  if (st.paused || st.solved || st.lost) return;
+  st.elapsed++;
+  if (st.gameMode==='challenge') {
+    const rem = TIME_LIMITS[st.difficulty] - st.elapsed;
+    if (rem <= 0) { st.elapsed = TIME_LIMITS[st.difficulty]; renderTimer(); triggerLoss('time'); return; }
+  }
+  renderTimer();
+}
+
+function renderTimer() {
+  const el = $('timerDisplay');
+  if (st.gameMode==='challenge') {
+    const rem = Math.max(0, TIME_LIMITS[st.difficulty] - st.elapsed);
+    el.textContent = formatTime(rem);
+    el.className = rem < 60 ? 'crit' : rem < 120 ? 'warn' : '';
+    $('timerLabel').textContent = 'remaining';
+  } else {
+    el.textContent = formatTime(st.elapsed);
+    el.className   = '';
+    $('timerLabel').textContent = 'time';
+  }
+}
+
+// ─── Overlays ────────────────────────────────────────────────────────────────
+
+function showOverlay(which) {
+  hideAllOverlays();
+  $(`ov${which.charAt(0).toUpperCase()+which.slice(1)}`).classList.add('visible');
+}
+function hideAllOverlays() {
+  ['ovGen','ovResult','ovPause'].forEach(id => $(id).classList.remove('visible'));
+}
+
+function buildResultOverlay(type, opts={}) {
+  const ov = $('ovResult');
+  ov.innerHTML = '';
+
+  if (type === 'win') {
+    const { wins, req, elapsed, errors, unlockedName, nextDiffKey, isMasterOfSudoku, isTimeMaster } = opts;
+
+    const h = el('h2');
+    h.textContent = 'Congratulations!';
+
+    const sub = el('p', 'ov-sub');
+    if (isMasterOfSudoku) {
+      sub.textContent = `You are a Master of Sudoku, ${st.username}!`;
+    } else if (isTimeMaster) {
+      sub.textContent = `You are a Time Master of Sudoku, ${st.username}!`;
+    } else {
+      sub.textContent = 'You have completed this level!';
+    }
+
+    const stats = el('div', 'result-stats');
+    const tStat = el('div', 'rstat');
+    tStat.innerHTML = `<span class="rstat-val">${elapsed}</span><span class="rstat-lbl">time taken</span>`;
+    const mStat = el('div', 'rstat');
+    mStat.innerHTML = `<span class="rstat-val">${errors}</span><span class="rstat-lbl">mistake${errors !== 1 ? 's' : ''}</span>`;
+    stats.append(tStat, mStat);
+
+    ov.append(h, sub, stats);
+
+    if (!isMasterOfSudoku && !isTimeMaster) {
+      const prog = el('p', 'ov-prog');
+      prog.textContent = `Win ${wins} of ${req} on this difficulty`;
+      ov.append(prog);
+      if (unlockedName) {
+        const u = el('p', 'ov-unlock');
+        u.textContent = `${unlockedName} unlocked!`;
+        ov.append(u);
+      }
+    }
+
+    const row = el('div', 'btn-row');
+    const next = el('button', 'obtn primary');
+    next.textContent = (isMasterOfSudoku || isTimeMaster) ? 'Play Again' : 'Next Puzzle';
+    next.addEventListener('click', () => newGame());
+    row.append(next);
+
+    if (isMasterOfSudoku || isTimeMaster) {
+      const menuBtn = el('button', 'obtn');
+      menuBtn.textContent = '← Menu';
+      menuBtn.addEventListener('click', () => goMenu());
+      row.append(menuBtn);
+    } else if (nextDiffKey) {
+      const tryNext = el('button', 'obtn');
+      tryNext.textContent = `Try ${unlockedName} ▶`;
+      tryNext.addEventListener('click', () => { st.difficulty = nextDiffKey; newGame(); });
+      row.append(tryNext);
+    }
+    ov.append(row);
+
+  } else if (opts.reason === 'time') {
+    const h = el('h2'); h.textContent = "Time's up!";
+    const p = el('p'); p.textContent = 'The clock ran out. Better luck next time!';
+    const row = el('div', 'btn-row');
+    const restart = el('button', 'obtn primary');
+    restart.textContent = 'Restart';
+    restart.addEventListener('click', () => newGame());
+    const menu = el('button', 'obtn');
+    menu.textContent = '← Menu';
+    menu.addEventListener('click', () => goMenu());
+    row.append(restart, menu);
+    ov.append(h, p, row);
+
+  } else {
+    const h = el('h2'); h.textContent = 'Oops!';
+    const p = el('p'); p.textContent = 'You have made three errors. The solution has been revealed.';
+    const row = el('div', 'btn-row');
+    const restart = el('button', 'obtn primary');
+    restart.textContent = 'Restart';
+    restart.addEventListener('click', () => newGame());
+    const menu = el('button', 'obtn');
+    menu.textContent = '← Main Menu';
+    menu.addEventListener('click', () => goMenu());
+    row.append(restart, menu);
+    ov.append(h, p, row);
+  }
+}
+
+// ─── Pause ───────────────────────────────────────────────────────────────────
+
+function pause() {
+  if (st.solved || st.lost || st.paused || !st.board) return;
+  st.paused = true;
+  clearInterval(st.timerInterval);
+  $('pauseUser').textContent = `Playing as ${st.username}`;
+  showOverlay('pause');
+  if (st.gameMode==='normal') persistGame();
+}
+
+function resume() {
+  if (!st.paused) return;
+  st.paused = false;
+  hideAllOverlays();
+  startTimer();
+}
+
+$('btnPause').addEventListener('click',   pause);
+$('btnResume').addEventListener('click',  resume);
+
+$('btnPauseMenu').addEventListener('click', () => {
+  if (st.gameMode==='normal' && st.board && !st.solved && !st.lost) persistGame();
+  goMenu();
+});
+
+// ─── Navigation ──────────────────────────────────────────────────────────────
+
+$('btnBack').addEventListener('click', () => {
+  if (st.gameMode==='normal' && st.board && !st.solved && !st.lost) persistGame();
+  goMenu();
+});
+
+$('btnNew').addEventListener('click', () => newGame());
+
+// ─── Render ──────────────────────────────────────────────────────────────────
+
+function renderAll() {
+  renderDiffBar();
+  renderProgress();
+  renderLives();
+  renderTimer();
+  renderNumpad();
+  renderBoard();
+}
+
+function renderDiffBar() {
+  const bar = $('diffBar'); bar.innerHTML='';
+  DIFFICULTIES.forEach((d,i) => {
+    const wins   = getWins(st.gameMode||'normal', d);
+    const req    = WINS_REQUIRED[st.gameMode||'normal'];
+    const locked = !isUnlocked(st.gameMode||'normal', d);
+    const btn = el('button','diff-btn'+(d===st.difficulty?' active':'')+(locked?' locked':''));
+    btn.title = locked ? `Complete ${LABELS[i-1]} ${req>1?req+'× ':''}to unlock` : LABELS[i];
+
+    const pip = el('span','pip');
+    for (let j=0;j<req;j++) {
+      const s=el('span'); if (j>=wins) s.className='empty'; pip.append(s);
+    }
+    btn.textContent=LABELS[i]; btn.append(pip);
+    if (!locked) btn.addEventListener('click', () => { st.difficulty=d; newGame(); });
+    bar.append(btn);
+  });
+}
+
+function renderProgress() {
+  const mode = st.gameMode||'normal';
+  const req  = WINS_REQUIRED[mode];
+  const wins = getWins(mode, st.difficulty);
+  const dots = $('progressDots'); dots.innerHTML='';
+  for (let i=0;i<req;i++) {
+    const d=el('div','dot'+(i<wins?' filled':'')); dots.append(d);
+  }
+  $('progressLabel').textContent = `${wins} / ${req} win${req>1?'s':''}`;
+}
+
+function renderLives() {
+  const max = st.gameMode==='challenge' ? 1 : 3;
+  for (let i=0;i<3;i++) {
+    const h = $(`h${i}`);
+    h.style.display = i < max ? '' : 'none';
+    h.className = 'heart' + (i >= st.lives ? ' lost' : '');
+  }
+  $('errCount').textContent = st.errors;
+}
+
+function renderNumpad() {
+  const pad=$('numpad'); pad.innerHTML='';
+  for (let n=1;n<=9;n++) {
+    let cnt=0;
+    if (st.board) for (let r=0;r<9;r++) for (let c=0;c<9;c++) if (st.board[r][c].value===n) cnt++;
+    const b=el('button','num-btn'+(cnt===9?' exhausted':''));
+    b.textContent=n;
+    b.addEventListener('click', ()=>inputNumber(n));
+    pad.append(b);
+  }
+}
+
+function renderBoard() {
+  const boardEl=$('board'); boardEl.innerHTML='';
+  if (!st.board) return;
+  for (let r=0;r<9;r++) for (let c=0;c<9;c++) {
+    const cell=el('div','cell');
+    cell.dataset.row=r; cell.dataset.col=c;
+    const cd=st.board[r][c];
+
+    if (cd.given) { cell.classList.add('given'); cell.textContent=cd.value; }
+    else if (cd.value) { cell.classList.add('filled'); cell.textContent=cd.value; }
+    else if (cd.notes.size>0) {
+      const n=el('div','notes');
+      for (let i=1;i<=9;i++) { const s=el('span'); s.textContent=cd.notes.has(i)?i:''; n.append(s); }
+      cell.append(n);
+    }
+
+    if (st.selected) {
+      const [sr,sc]=st.selected;
+      if (r===sr&&c===sc) cell.classList.add('selected');
+      else if (r===sr||c===sc||(Math.floor(r/3)===Math.floor(sr/3)&&Math.floor(c/3)===Math.floor(sc/3)))
+        cell.classList.add('highlight');
+      const sv=st.board[sr][sc].value;
+      if (sv&&cd.value===sv&&!(r===sr&&c===sc)) cell.classList.add('same-num');
+    }
+
+    cell.addEventListener('click', ()=>selectCell(r,c));
+    boardEl.append(cell);
+  }
+}
+
+function flashCell(r,c,cls) {
+  const e=$('board').children[r*9+c];
+  if (!e) return;
+  e.classList.add(cls);
+  setTimeout(()=>e.classList.remove(cls), 600);
+}
+
+// ─── Game Logic ───────────────────────────────────────────────────────────────
+
+function selectCell(r,c) {
+  if (st.solved||st.lost||st.paused) return;
+  st.selected=[r,c]; renderBoard();
+}
+
+function inputNumber(n) {
+  if (!st.selected||st.solved||st.lost||st.paused||!st.board) return;
+  const [r,c]=st.selected;
+  const cd=st.board[r][c];
+  if (cd.given) return;
+
+  if (st.noteMode) {
+    if (cd.value) return;
+    cd.notes.has(n)?cd.notes.delete(n):cd.notes.add(n);
+    renderBoard(); persistGame(); return;
+  }
+
+  cd.notes.clear();
+  if (cd.value===n) return;
+
+  if (st.solution[r][c]===n) {
+    cd.value=n;
+    clearNotesFor(r,c,n);
+    renderBoard(); renderNumpad(); persistGame();
+    checkSolved();
+  } else {
+    st.errors++; st.lives--;
+    renderLives();
+    flashCell(r,c,'err-flash');
+    if (st.lives <= 0) {
+      // Trigger loss after the flash is visible — don't let persistGame block this
+      setTimeout(() => triggerLoss('errors'), 350);
+    } else {
+      persistGame();
+    }
+  }
+}
+
+function clearNotesFor(row,col,n) {
+  const br=Math.floor(row/3)*3, bc=Math.floor(col/3)*3;
+  for (let i=0;i<9;i++) { st.board[row][i].notes.delete(n); st.board[i][col].notes.delete(n); }
+  for (let i=0;i<3;i++) for (let j=0;j<3;j++) st.board[br+i][bc+j].notes.delete(n);
+}
+
+function eraseCell() {
+  if (!st.selected||st.solved||st.lost||st.paused||!st.board) return;
+  const [r,c]=st.selected; const cd=st.board[r][c];
+  if (cd.given) return;
+  cd.value=0; cd.notes.clear();
+  renderBoard(); renderNumpad(); persistGame();
+}
+
+function giveHint() {
+  if (st.solved||st.lost||st.paused||!st.board) return;
+  const emp=[];
+  for (let r=0;r<9;r++) for (let c=0;c<9;c++)
+    if (!st.board[r][c].given&&!st.board[r][c].value) emp.push([r,c]);
+  if (!emp.length) return;
+  const [r,c]=emp[Math.floor(Math.random()*emp.length)];
+  st.board[r][c].value=st.solution[r][c]; st.board[r][c].notes.clear();
+  clearNotesFor(r,c,st.solution[r][c]);
+  st.selected=[r,c];
+  renderBoard(); renderNumpad(); persistGame();
+  checkSolved();
+}
+
+function checkSolved() {
+  // We only ever place correct values, so a full board = solved
+  for (let r=0;r<9;r++) for (let c=0;c<9;c++)
+    if (!st.board[r][c].value) return;
+
+  st.solved = true;
+  clearInterval(st.timerInterval);
+  _forget(SAVE_KEY);
+
+  // Read prevWins BEFORE saving to correctly detect new unlocks
+  const prevWins = getWins(st.gameMode, st.difficulty);
+  const req      = WINS_REQUIRED[st.gameMode];
+  const prog     = loadProg(st.gameMode);
+  if ((prog[st.difficulty]||0) < req) {
+    prog[st.difficulty] = (prog[st.difficulty]||0) + 1;
+    try { saveProg(st.gameMode, prog); } catch(e) {}
+  }
+  const newWins = getWins(st.gameMode, st.difficulty);
+
+  renderProgress();
+  renderDiffBar();
+
+  const idx          = DIFFICULTIES.indexOf(st.difficulty);
+  const nextDiff     = DIFFICULTIES[idx+1];
+  const justUnlocked = prevWins < req && newWins >= req && !!nextDiff;
+  const allComplete  = prevWins < req && newWins >= req && !nextDiff;
+  const isMasterOfSudoku = allComplete && st.gameMode === 'normal';
+  const isTimeMaster     = allComplete && st.gameMode === 'challenge';
+  if (isTimeMaster) _store('sudoku_time_master', true);
+
+  buildResultOverlay('win', {
+    wins:            newWins,
+    req:             req,
+    elapsed:         formatTime(st.elapsed),
+    errors:          st.errors,
+    unlockedName:    justUnlocked ? LABELS[idx+1] : null,
+    nextDiffKey:     justUnlocked ? nextDiff : null,
+    isMasterOfSudoku,
+    isTimeMaster,
+  });
+  showOverlay('result');
+}
+
+function triggerLoss(reason='errors') {
+  st.lost = true;
+  clearInterval(st.timerInterval);
+  _forget(SAVE_KEY);
+  // Only reveal the solution for error-based losses, not time-outs
+  if (reason !== 'time' && st.board) {
+    for (let r=0;r<9;r++) for (let c=0;c<9;c++)
+      if (!st.board[r][c].given) st.board[r][c].value = st.solution[r][c];
+    renderBoard();
+  }
+  buildResultOverlay('loss', { reason });
+  showOverlay('result');
+}
+
+// ─── Note toggle ──────────────────────────────────────────────────────────────
+
+function toggleNotes() {
+  st.noteMode=!st.noteMode;
+  $('btnNotes').classList.toggle('active', st.noteMode);
+}
+
+$('btnErase').addEventListener('click', eraseCell);
+$('btnNotes').addEventListener('click', toggleNotes);
+$('btnHint').addEventListener('click',  giveHint);
+
+// ─── Keyboard ────────────────────────────────────────────────────────────────
+
+document.addEventListener('keydown', e => {
+  if ($('screen-game').style.display==='none') return;
+  if (e.key==='Escape') { if (st.paused) resume(); else pause(); return; }
+  if (st.paused) return;
+  if (e.key>='1'&&e.key<='9') { inputNumber(+e.key); return; }
+  if (e.key==='Backspace'||e.key==='Delete'||e.key==='0') { eraseCell(); return; }
+  if (e.key==='n'||e.key==='N') { toggleNotes(); return; }
+  if (!st.selected) return;
+  const [r,c]=st.selected;
+  const dirs={ArrowUp:[-1,0],ArrowDown:[1,0],ArrowLeft:[0,-1],ArrowRight:[0,1]};
+  if (dirs[e.key]) {
+    e.preventDefault();
+    const [dr,dc]=dirs[e.key];
+    selectCell(Math.max(0,Math.min(8,r+dr)), Math.max(0,Math.min(8,c+dc)));
+  }
+});
+
+// ─── Boot ────────────────────────────────────────────────────────────────────
+
+(function boot() {
+  const saved = _load(NAME_KEY);
+  if (saved) {
+    st.username = saved;
+    goMenu();
+  } else {
+    showScreen('screen-username');
+    setTimeout(()=>$('nameInput').focus(), 50);
+  }
+})();
+</script>
+</body>
+</html>
