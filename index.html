@@ -781,6 +781,62 @@
       .mode-card  { width: 100%; max-width: 290px; }
       .stats-row  { gap: 1.25rem; }
     }
+
+    .pvp-bomb-btn {
+      display: none;
+      margin-top: 0.6rem;
+      padding: 0.55rem 2rem;
+      border: none;
+      border-radius: 999px;
+      background: #e74c3c;
+      color: #fff;
+      font-size: 0.9rem;
+      font-weight: 700;
+      font-family: inherit;
+      cursor: pointer;
+      letter-spacing: 0.03em;
+      transition: opacity 0.2s, background 0.2s;
+    }
+    .pvp-bomb-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .pvp-bomb-btn:not(:disabled):hover { background: #c0392b; }
+
+    .bomb-notification {
+      position: fixed;
+      top: 50%; left: 50%;
+      transform: translate(-50%, -50%) scale(0.85);
+      background: #c0392b;
+      color: #fff;
+      padding: 0.9rem 1.6rem;
+      border-radius: 14px;
+      font-size: 1rem;
+      font-weight: 700;
+      z-index: 1000;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.25s, transform 0.25s;
+      text-align: center;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+    }
+    .bomb-notification.visible {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1);
+    }
+
+    @keyframes bombFade {
+      0%   { opacity: 1; }
+      40%  { opacity: 0; background: #ff6b6b; }
+      100% { opacity: 0; }
+    }
+    .bomb-flash { animation: bombFade 0.65s ease-in-out forwards; }
+
+    #fireworksCanvas {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 9999;
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -1010,6 +1066,9 @@
     <button class="tool-btn" id="btnHint">⚡ hint</button>
     <button class="tool-btn" id="btnNew">↺ new</button>
   </div>
+
+  <button class="pvp-bomb-btn" id="pvpBombBtn" disabled>💣 Bomb (30s)</button>
+  <div class="bomb-notification" id="bombNotification"></div>
 
 </div>
 
@@ -1450,6 +1509,8 @@ const st = {
   pvpLockedOut:    false,
   pvpFinished:     false,
   pvpGameOverSent: false,
+  pvpBombEnabled:  false,
+  pvpBombUsed:     false,
 };
 
 // ─── Screen switching ─────────────────────────────────────────────────────────
@@ -1622,6 +1683,7 @@ $('pvpCodeInput').addEventListener('input', () => {
 });
 $('btnPvpStart').addEventListener('click', pvpHostStartGame);
 $('btnPvpRoomBack').addEventListener('click', () => { pvpCleanup(); showScreen('screen-pvp'); });
+$('pvpBombBtn').addEventListener('click', pvpUseBomb);
 
 $('btnPlayChallenge').addEventListener('click', () => {
   st.gameMode   = 'challenge';
@@ -1712,6 +1774,14 @@ function tickTimer() {
     if (rem <= 0) { st.elapsed = st.pvpTimeLimit; renderTimer(); pvpTimeOut(); return; }
   }
   renderTimer();
+  if (st.gameMode==='pvp' && st.pvpBombEnabled && !st.pvpBombUsed) {
+    const btn = $('pvpBombBtn');
+    if (st.elapsed >= 30) {
+      btn.disabled = false; btn.textContent = '💣 Bomb';
+    } else {
+      btn.disabled = true; btn.textContent = `💣 Bomb (${30 - st.elapsed}s)`;
+    }
+  }
 }
 
 function renderTimer() {
@@ -1918,6 +1988,8 @@ function pvpCleanup() {
   st.pvpConns=[]; st.pvpPlayers=[]; st.pvpCode=null; st.pvpRole=null; st.pvpResults=[];
   st.pvpTimeLimit=0; st.pvpHints=3; st.pvpMaxMistakes=3; st.pvpHintsUsed=0;
   st.pvpLockedOut=false; st.pvpFinished=false; st.pvpGameOverSent=false;
+  st.pvpBombEnabled=false; st.pvpBombUsed=false;
+  $('pvpBombBtn').style.display='none';
 }
 
 function goPvpChoice() {
@@ -1986,7 +2058,7 @@ function pvpHost() {
     });
     row.append(lbl, pills); return row;
   }
-  st.pvpTimeLimit = 0; st.pvpHints = 3; st.pvpMaxMistakes = 3;
+  st.pvpTimeLimit = 0; st.pvpHints = 3; st.pvpMaxMistakes = 3; st.pvpBombEnabled = false;
   settings.append(
     makePills('Time Limit', [
       {label:'None',val:0},{label:'5 min',val:300},{label:'10 min',val:600},
@@ -1997,7 +2069,10 @@ function pvpHost() {
     ], 3, v => st.pvpHints = v),
     makePills('Mistakes', [
       {label:'1',val:1},{label:'2',val:2},{label:'3',val:3}
-    ], 3, v => st.pvpMaxMistakes = v)
+    ], 3, v => st.pvpMaxMistakes = v),
+    makePills('Bomb', [
+      {label:'Off',val:false},{label:'On',val:true}
+    ], false, v => st.pvpBombEnabled = v)
   );
   $('pvpHostControls').insertBefore(settings, $('pvpDiffPicker'));
 
@@ -2040,6 +2115,9 @@ function pvpHostOnData(data, conn) {
     st.pvpResults.push(result);
     pvpBroadcast({type:'result', result});
     pvpCheckGameOver();
+  } else if (data.type === 'bomb') {
+    pvpReceiveBomb(data.username);
+    pvpBroadcast({type:'bomb', username:data.username}, conn);
   }
 }
 
@@ -2106,6 +2184,8 @@ function pvpJoinOnData(data) {
     pvpStartGame(data);
   } else if (data.type === 'result') {
     st.pvpResults.push(data.result);
+  } else if (data.type === 'bomb') {
+    pvpReceiveBomb(data.username);
   } else if (data.type === 'game_over') {
     pvpShowFinalResult(data);
   }
@@ -2133,7 +2213,8 @@ function pvpHostStartGame() {
   st.pvpResults = [];
   const payload = {
     type:'start', puzzle, solution, difficulty:st.pvpDiff, players:st.pvpPlayers,
-    pvpTimeLimit:st.pvpTimeLimit, pvpHints:st.pvpHints, pvpMaxMistakes:st.pvpMaxMistakes
+    pvpTimeLimit:st.pvpTimeLimit, pvpHints:st.pvpHints, pvpMaxMistakes:st.pvpMaxMistakes,
+    pvpBombEnabled:st.pvpBombEnabled
   };
   pvpBroadcast(payload);
   pvpStartGame(payload);
@@ -2146,6 +2227,8 @@ function pvpStartGame(data) {
   st.pvpTimeLimit   = data.pvpTimeLimit   != null ? data.pvpTimeLimit   : 0;
   st.pvpHints       = data.pvpHints       != null ? data.pvpHints       : 3;
   st.pvpMaxMistakes = data.pvpMaxMistakes != null ? data.pvpMaxMistakes : 3;
+  st.pvpBombEnabled = !!data.pvpBombEnabled;
+  st.pvpBombUsed = false;
   st.pvpHintsUsed=0; st.pvpLockedOut=false; st.pvpFinished=false; st.pvpGameOverSent=false;
   st.errors=0; st.lives=st.pvpMaxMistakes; st.selected=null; st.noteMode=false;
   st.solved=false; st.lost=false; st.paused=false; st.elapsed=0;
@@ -2158,6 +2241,10 @@ function pvpStartGame(data) {
   showScreen('screen-game'); applyTheme(); playTrack('pvp');
   hideAllOverlays(); $('btnNotes').classList.remove('active');
   renderAll(); startTimer();
+  const bombBtn = $('pvpBombBtn');
+  bombBtn.style.display = st.pvpBombEnabled ? '' : 'none';
+  bombBtn.disabled = true;
+  bombBtn.textContent = '💣 Bomb (30s)';
 }
 
 function pvpOnFinished() {
@@ -2187,7 +2274,9 @@ function pvpBroadcastResult(score, finished) {
 
 function pvpCheckGameOver() {
   if (st.pvpGameOverSent) return;
-  if (st.pvpResults.length >= st.pvpPlayers.length) {
+  const anyFinished = st.pvpResults.some(r => r.finished);
+  const allDone     = st.pvpResults.length >= st.pvpPlayers.length;
+  if (anyFinished || allDone) {
     st.pvpGameOverSent = true;
     const winner = pvpDetermineWinner(st.pvpResults);
     pvpBroadcast({type:'game_over', results:st.pvpResults, winner});
@@ -2211,6 +2300,74 @@ function pvpLockOut() {
   showOverlay('result');
 }
 
+function pvpUseBomb() {
+  if (!st.pvpBombEnabled || st.pvpBombUsed || st.elapsed < 30 || st.solved || st.lost) return;
+  st.pvpBombUsed = true;
+  // Bomber loses 30s
+  st.elapsed += 30;
+  if (st.pvpTimeLimit > 0) st.elapsed = Math.min(st.elapsed, st.pvpTimeLimit);
+  renderTimer();
+  const btn = $('pvpBombBtn');
+  btn.disabled = true; btn.textContent = '💣 Used';
+  // Send bomb to opponent(s)
+  const msg = {type:'bomb', username:st.username};
+  if (st.pvpRole==='host') pvpBroadcast(msg);
+  else if (st.pvpConns[0]) try { st.pvpConns[0].send(msg); } catch(e) {}
+}
+
+function playBombSound() {
+  try {
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    // Descending boom tone (200 → 30 Hz)
+    const osc = ac.createOscillator();
+    const oscGain = ac.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(200, ac.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(30, ac.currentTime + 0.35);
+    oscGain.gain.setValueAtTime(0.85, ac.currentTime);
+    oscGain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.35);
+    osc.connect(oscGain); oscGain.connect(ac.destination);
+    osc.start(); osc.stop(ac.currentTime + 0.35);
+    // Short noise burst for the "crunch"
+    const bufSize = Math.floor(ac.sampleRate * 0.18);
+    const buf = ac.createBuffer(1, bufSize, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i = 0; i < bufSize; i++) data[i] = Math.random() * 2 - 1;
+    const noise = ac.createBufferSource();
+    noise.buffer = buf;
+    const noiseGain = ac.createGain();
+    noiseGain.gain.setValueAtTime(0.35, ac.currentTime);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.18);
+    noise.connect(noiseGain); noiseGain.connect(ac.destination);
+    noise.start(); noise.stop(ac.currentTime + 0.18);
+  } catch(e) {}
+}
+
+function pvpReceiveBomb(fromUsername) {
+  playBombSound();
+  // Show notification
+  const notif = $('bombNotification');
+  notif.textContent = `💣 ${fromUsername} has bombed you!`;
+  notif.classList.add('visible');
+  setTimeout(() => notif.classList.remove('visible'), 3000);
+  // Find non-given filled cells and clear up to 3 randomly
+  if (!st.board) return;
+  const filled = [];
+  for (let r=0;r<9;r++) for (let c=0;c<9;c++)
+    if (!st.board[r][c].given && st.board[r][c].value) filled.push([r,c]);
+  for (let i=filled.length-1;i>0;i--) {
+    const j=Math.floor(Math.random()*(i+1)); [filled[i],filled[j]]=[filled[j],filled[i]];
+  }
+  filled.slice(0,3).forEach(([r,c]) => {
+    const cellEl = $('board').children[r*9+c];
+    if (cellEl) cellEl.classList.add('bomb-flash');
+    setTimeout(() => {
+      st.board[r][c].value=0; st.board[r][c].notes.clear();
+      renderBoard(); renderNumpad();
+    }, 650);
+  });
+}
+
 function pvpTimeOut() {
   if (st.pvpLockedOut || st.pvpFinished) return;
   st.pvpLockedOut = true;
@@ -2221,7 +2378,14 @@ function pvpTimeOut() {
 }
 
 function pvpShowFinalResult({results, winner}) {
-  buildResultOverlay('pvp-final', {winner, results});
+  // Stop the game for this player regardless of their state
+  st.solved = true;
+  clearInterval(st.timerInterval);
+  // Include local player's result if the game ended before they submitted (e.g. someone else finished first)
+  const allResults = results.find(r => r.username === st.username)
+    ? results
+    : [...results, {username:st.username, elapsed:st.elapsed, score:countPvpScore(), finished:false}];
+  buildResultOverlay('pvp-final', {winner, results:allResults});
   showOverlay('result');
 }
 
@@ -2476,11 +2640,15 @@ function checkSolved() {
   clearInterval(st.timerInterval);
   _forget(SAVE_KEY);
 
-  // PvP win — show waiting overlay; host will broadcast game_over when all results are in
+  // PvP win — notify others; host shows final result immediately, joiners wait
   if (st.gameMode === 'pvp') {
     pvpOnFinished();
-    buildResultOverlay('pvp-waiting', {reason:'finished'});
-    showOverlay('result');
+    if (!st.pvpGameOverSent) {
+      // Joiner: host hasn't broadcast game_over yet, show waiting screen
+      buildResultOverlay('pvp-waiting', {reason:'finished'});
+      showOverlay('result');
+    }
+    // Host: pvpOnFinished → pvpCheckGameOver already called pvpShowFinalResult, no-op here
     return;
   }
 
@@ -2516,6 +2684,7 @@ function checkSolved() {
     isTimeMaster,
   });
   showOverlay('result');
+  if (justUnlocked || allComplete) triggerCelebration();
 }
 
 function triggerLoss(reason='errors') {
@@ -2562,6 +2731,100 @@ document.addEventListener('keydown', e => {
   }
 });
 
+// ─── Celebration (fireworks + fanfare) ───────────────────────────────────────
+
+function triggerCelebration() {
+  playFanfare();
+  launchFireworks();
+}
+
+function playFanfare() {
+  try {
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    // Four ascending notes: C5 E5 G5 C6  — quick triplet then held top note
+    const notes  = [523.25, 659.25, 783.99, 1046.50];
+    const starts = [0,      0.16,   0.32,   0.50];
+    const durs   = [0.18,   0.18,   0.18,   0.70];
+    notes.forEach((freq, i) => {
+      const osc  = ac.createOscillator();
+      const gain = ac.createGain();
+      // Two oscillators an octave apart for a brassy timbre
+      const osc2  = ac.createOscillator();
+      const gain2 = ac.createGain();
+      osc.type  = 'sawtooth'; osc.frequency.value  = freq;
+      osc2.type = 'sawtooth'; osc2.frequency.value = freq * 2;
+      gain2.gain.value = 0.08;
+      osc2.connect(gain2); gain2.connect(ac.destination);
+      osc.connect(gain);   gain.connect(ac.destination);
+      const t = ac.currentTime + starts[i];
+      gain.gain.setValueAtTime(0, t);
+      gain.gain.linearRampToValueAtTime(0.22, t + 0.025);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + durs[i]);
+      osc.start(t);  osc.stop(t + durs[i]);
+      osc2.start(t); osc2.stop(t + durs[i]);
+    });
+  } catch(e) {}
+}
+
+function launchFireworks() {
+  const canvas = document.getElementById('fireworksCanvas');
+  if (!canvas) return;
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+  canvas.style.display = 'block';
+  const ctx = canvas.getContext('2d');
+  const COLORS = ['#ff6b6b','#ffd93d','#6bcb77','#4d96ff','#ff9f43','#a29bfe','#fd79a8','#00cec9'];
+  const particles = [];
+
+  function burst(x, y) {
+    const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+    for (let i = 0; i < 70; i++) {
+      const angle = (Math.PI * 2 / 70) * i + Math.random() * 0.2;
+      const speed = 1.5 + Math.random() * 5;
+      particles.push({ x, y, vx: Math.cos(angle)*speed, vy: Math.sin(angle)*speed,
+                        alpha: 1, color, r: 1.5 + Math.random()*2 });
+    }
+  }
+
+  // Schedule 6 bursts spread over 2 seconds
+  const positions = [
+    [0.25, 0.25],[0.75, 0.20],[0.50, 0.35],
+    [0.20, 0.50],[0.80, 0.45],[0.50, 0.20],
+  ];
+  positions.forEach(([rx, ry], i) => {
+    setTimeout(() => burst(canvas.width*rx, canvas.height*ry), i * 350);
+  });
+
+  let lastTs = null;
+  function animate(ts) {
+    if (!lastTs) lastTs = ts;
+    const dt = Math.min((ts - lastTs) / 16.67, 3); // normalise to 60 fps
+    lastTs = ts;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    for (let i = particles.length - 1; i >= 0; i--) {
+      const p = particles[i];
+      p.x += p.vx * dt; p.y += p.vy * dt;
+      p.vy += 0.09 * dt;   // gravity
+      p.vx *= 0.99;        // air drag
+      p.alpha -= 0.012 * dt;
+      if (p.alpha <= 0) { particles.splice(i, 1); continue; }
+      ctx.globalAlpha = p.alpha;
+      ctx.fillStyle   = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    if (ts - (lastTs - dt*16.67) < 5000 || particles.length > 0) {
+      requestAnimationFrame(animate);
+    } else {
+      canvas.style.display = 'none';
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+  requestAnimationFrame(animate);
+}
+
 // ─── Boot ────────────────────────────────────────────────────────────────────
 
 (function boot() {
@@ -2575,5 +2838,6 @@ document.addEventListener('keydown', e => {
   }
 })();
 </script>
+<canvas id="fireworksCanvas"></canvas>
 </body>
 </html>
