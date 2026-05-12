@@ -1445,6 +1445,15 @@ const AUDIO_IDS = { menu:'audioMenu', normal:'audioNormal', challenge:'audioChal
 function _audio(name) { return document.getElementById(AUDIO_IDS[name] || ''); }
 let _currentTrack = null;
 
+// Unlock audio on first user gesture (required by browsers)
+let _audioUnlocked = false;
+function _unlockAudio() {
+  if (_audioUnlocked) return;
+  _audioUnlocked = true;
+  if (_currentTrack && !st.muted) _currentTrack.play().catch(() => {});
+}
+document.addEventListener('click', _unlockAudio, { once: true });
+
 function playTrack(name) {
   const next = _audio(name);
   if (!next) return;
