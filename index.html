@@ -1449,14 +1449,12 @@ const AUDIO_IDS = { menu:'audioMenu', normal:'audioNormal', challenge:'audioChal
 function _audio(name) { return document.getElementById(AUDIO_IDS[name] || ''); }
 let _currentTrack = null;
 
-// Unlock audio on first user gesture (required by browsers)
-let _audioUnlocked = false;
-function _unlockAudio() {
-  if (_audioUnlocked) return;
-  _audioUnlocked = true;
-  if (_currentTrack && !st.muted) _currentTrack.play().catch(() => {});
-}
-document.addEventListener('click', _unlockAudio, { once: true });
+// Resume paused audio on any click (handles browser autoplay block)
+document.addEventListener('click', function() {
+  if (_currentTrack && !st.muted && _currentTrack.paused) {
+    _currentTrack.play().catch(() => {});
+  }
+});
 
 function playTrack(name) {
   const next = _audio(name);
