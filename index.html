@@ -283,6 +283,7 @@
       border-radius: 6px;
       padding: 0.35rem 0.6rem;
       line-height: 1.7;
+      min-height: 5.5rem;
     }
     .mode-meta span { display: block; }
 
@@ -750,6 +751,13 @@
     .pvp-diff-card:hover { border-color: #ffb347; }
     .pvp-diff-card.selected { border-color: #ff8c00; background: #fff3e0; font-weight: 600; }
 
+    .pvp-settings { width: 100%; max-width: 380px; margin-bottom: 0.8rem; }
+    .pvp-setting-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 0.45rem; }
+    .pvp-setting-label { font-size: 0.8rem; color: var(--muted); font-weight: 500; white-space: nowrap; margin-right: 0.5rem; }
+    .pvp-pills { display: flex; gap: 0.3rem; flex-wrap: wrap; justify-content: flex-end; }
+    .pvp-pill { border: 1.5px solid #e0c9a6; background: #fff; color: #4a1a00; border-radius: 6px; padding: 0.18rem 0.45rem; font-size: 0.75rem; cursor: pointer; font-family: inherit; transition: all 0.15s; }
+    .pvp-pill:hover { border-color: #ff8c00; }
+    .pvp-pill.selected { background: #fff3e0; border-color: #ff8c00; font-weight: 600; }
     .pvp-leaderboard { width: 100%; max-width: 380px; margin: 0.5rem 0 1rem; }
     .pvp-lb-row {
       display: flex; align-items: center; gap: 0.75rem;
@@ -804,17 +812,18 @@
     <div class="mode-card normal-card">
       <div class="mode-icon">◇</div>
       <div class="mode-name">Normal</div>
-      <div class="mode-desc">Play at your own pace. Your game saves automatically so you can leave and come back anytime.</div>
+      <div class="mode-desc">Play at your own pace. Progress saves automatically so you can leave and pick up where you left off.</div>
       <div class="mode-meta">
         <span>♥ 3 lives per puzzle</span>
         <span>★ Win 3× to unlock next level</span>
+        <span>💾 Auto-saved anytime</span>
       </div>
       <button class="card-btn" id="btnPlayNormal">Play</button>
     </div>
     <div class="mode-card challenge-card">
       <div class="mode-icon">⏱</div>
       <div class="mode-name">Time Challenge</div>
-      <div class="mode-desc">Race against the clock. One mistake and it's over — one win unlocks the next level.</div>
+      <div class="mode-desc">Race against the clock. One mistake ends your run — beat the timer to unlock harder difficulties.</div>
       <div class="mode-meta">
         <span>Beginner · 8 min</span>
         <span>Intermediate · 7 min</span>
@@ -826,7 +835,7 @@
     <div class="mode-card special-card">
       <div class="mode-icon">◈</div>
       <div class="mode-name">Special Modes</div>
-      <div class="mode-desc">Take on a new challenge. Jigsaw, Killer, and Arrow Sudoku each add a unique twist to the classic game.</div>
+      <div class="mode-desc">Three variants on classic Sudoku — each with unique rules that change the way you think and solve.</div>
       <div class="mode-meta">
         <span>◈ Jigsaw · irregular regions</span>
         <span>✕ Killer · cage sums</span>
@@ -837,10 +846,11 @@
     <div class="mode-card pvp-card">
       <div class="mode-icon">⚔</div>
       <div class="mode-name">PvP</div>
-      <div class="mode-desc">Race a friend on the same puzzle. Host a room or join one with a 4-letter code.</div>
+      <div class="mode-desc">Challenge a friend to a race. Both players solve the same puzzle — first to finish takes the win.</div>
       <div class="mode-meta">
         <span>⚔ Same puzzle for everyone</span>
         <span>🏆 First to finish wins</span>
+        <span>🎯 Host sets rules & difficulty</span>
       </div>
       <button class="card-btn" id="btnPlayPvp">Play</button>
     </div>
@@ -1006,6 +1016,7 @@
 <audio id="audioMenu"      src="music/menu.mp3"      loop preload="auto"></audio>
 <audio id="audioNormal"    src="music/normal.mp3"    loop preload="auto"></audio>
 <audio id="audioChallenge" src="music/challenge.mp3" loop preload="auto"></audio>
+<audio id="audioPvp"       src="music/PvP.mp3"       loop preload="auto"></audio>
 
 <script>
 // ─── Sudoku Generator ────────────────────────────────────────────────────────
@@ -1425,13 +1436,20 @@ const st = {
   regions:       null,
   cages:         null,
   arrows:        null,
-  pvpRole:       null,
-  pvpCode:       null,
-  pvpPeer:       null,
-  pvpConns:      [],
-  pvpPlayers:    [],
-  pvpDiff:       'beginner',
-  pvpResults:    [],
+  pvpRole:         null,
+  pvpCode:         null,
+  pvpPeer:         null,
+  pvpConns:        [],
+  pvpPlayers:      [],
+  pvpDiff:         'beginner',
+  pvpResults:      [],
+  pvpTimeLimit:    0,
+  pvpHints:        3,
+  pvpMaxMistakes:  3,
+  pvpHintsUsed:    0,
+  pvpLockedOut:    false,
+  pvpFinished:     false,
+  pvpGameOverSent: false,
 };
 
 // ─── Screen switching ─────────────────────────────────────────────────────────
@@ -1445,12 +1463,20 @@ function showScreen(id) {
 // ─── Audio ───────────────────────────────────────────────────────────────────
 
 // Resolve audio elements lazily (audio tags are parsed after this script block).
-const AUDIO_IDS = { menu:'audioMenu', normal:'audioNormal', challenge:'audioChallenge' };
+const AUDIO_IDS = { menu:'audioMenu', normal:'audioNormal', challenge:'audioChallenge', pvp:'audioPvp' };
 function _audio(name) { return document.getElementById(AUDIO_IDS[name] || ''); }
 let _currentTrack = null;
 
-// Resume paused audio on any click (handles browser autoplay block)
+// On first user gesture unlock every audio element so any can play later without a per-element policy block.
+let _audioUnlocked = false;
 document.addEventListener('click', function() {
+  if (!_audioUnlocked) {
+    _audioUnlocked = true;
+    Object.keys(AUDIO_IDS).forEach(name => {
+      const t = _audio(name);
+      if (t && t !== _currentTrack) t.play().then(() => t.pause()).catch(() => {});
+    });
+  }
   if (_currentTrack && !st.muted && _currentTrack.paused) {
     _currentTrack.play().catch(() => {});
   }
@@ -1681,6 +1707,9 @@ function tickTimer() {
   if (st.gameMode==='challenge') {
     const rem = TIME_LIMITS[st.difficulty] - st.elapsed;
     if (rem <= 0) { st.elapsed = TIME_LIMITS[st.difficulty]; renderTimer(); triggerLoss('time'); return; }
+  } else if (st.gameMode==='pvp' && st.pvpTimeLimit > 0) {
+    const rem = st.pvpTimeLimit - st.elapsed;
+    if (rem <= 0) { st.elapsed = st.pvpTimeLimit; renderTimer(); pvpTimeOut(); return; }
   }
   renderTimer();
 }
@@ -1689,6 +1718,11 @@ function renderTimer() {
   const el = $('timerDisplay');
   if (st.gameMode==='challenge') {
     const rem = Math.max(0, TIME_LIMITS[st.difficulty] - st.elapsed);
+    el.textContent = formatTime(rem);
+    el.className = rem < 60 ? 'crit' : rem < 120 ? 'warn' : '';
+    $('timerLabel').textContent = 'remaining';
+  } else if (st.gameMode==='pvp' && st.pvpTimeLimit > 0) {
+    const rem = Math.max(0, st.pvpTimeLimit - st.elapsed);
     el.textContent = formatTime(rem);
     el.className = rem < 60 ? 'crit' : rem < 120 ? 'warn' : '';
     $('timerLabel').textContent = 'remaining';
@@ -1713,18 +1747,57 @@ function buildResultOverlay(type, opts={}) {
   const ov = $('ovResult');
   ov.innerHTML = '';
 
-  if (type === 'pvp-win') {
-    const pos = st.pvpResults.length;
-    const h = el('h2'); h.textContent = pos === 1 ? '🏆 You Won!' : `#${pos} — Finished!`;
-    const sub = el('p','ov-sub'); sub.textContent = `Your time: ${formatTime(opts.elapsed)}`;
-    const lbLbl = el('p','ov-prog'); lbLbl.textContent = 'Leaderboard';
-    const lb = el('div','pvp-leaderboard'); lb.id='pvpLeaderboard';
-    const row = el('div','btn-row');
+  if (type === 'pvp-waiting') {
+    const msgs = {finished:['✓ Puzzle Complete!','Waiting for other players...'],
+                  timeout: ['⏱ Time\'s Up!',     'Waiting for other players...'],
+                  locked:  ['🔒 No Lives Left',   'Waiting for other players...']};
+    const [title, sub] = msgs[opts.reason] || ['Done','Waiting...'];
+    const h = el('h2'); h.textContent = title;
+    const s = el('p','ov-sub'); s.textContent = sub;
+    const status = el('p','pvp-status'); status.textContent = '⌛ Hang tight...';
+    const menuBtn = el('button','obtn'); menuBtn.textContent = '← Leave';
+    menuBtn.addEventListener('click', () => { pvpCleanup(); goMenu(); });
+    const row = el('div','btn-row'); row.append(menuBtn);
+    ov.append(h, s, status, row);
+    return;
+  }
+
+  if (type === 'pvp-final') {
+    const {winner, results} = opts;
+    const iWon = winner === st.username;
+    const noOneFinished = results.every(r => !r.finished);
+    const h = el('h2'); h.textContent = iWon ? '🏆 You Won!' : 'Game Over';
+    const sub = el('p','ov-sub');
+    sub.textContent = iWon
+      ? `Congratulations ${st.username}, you are the winner of Sudoku PvP!`
+      : `Sorry! ${winner} wins!`;
+    const sorted = [...results].sort((a,b) => {
+      if (a.finished && !b.finished) return -1;
+      if (!a.finished && b.finished) return 1;
+      if (a.finished && b.finished) return a.elapsed - b.elapsed;
+      return b.score - a.score;
+    });
+    const table = el('div','pvp-leaderboard');
+    sorted.forEach((r, i) => {
+      const row = el('div','pvp-lb-row');
+      const rank = el('span','pvp-lb-rank'); rank.textContent = `#${i+1}`;
+      const name = el('span'); name.textContent = r.username + (r.username===st.username?' (You)':'');
+      const stat = el('span','pvp-lb-time');
+      stat.textContent = r.finished ? formatTime(r.elapsed) : `${r.score} cells`;
+      if (r.username===winner) row.style.fontWeight='700';
+      row.append(rank, name, stat); table.append(row);
+    });
+    ov.append(h, sub);
+    if (noOneFinished) {
+      const note = el('p','pvp-status'); note.style.fontSize='0.78rem';
+      note.textContent = 'No one finished — winner by cells completed.';
+      ov.append(note);
+    }
+    ov.append(table);
     const menuBtn = el('button','obtn'); menuBtn.textContent = '← Menu';
     menuBtn.addEventListener('click', () => { pvpCleanup(); goMenu(); });
-    row.append(menuBtn);
-    ov.append(h, sub, lbLbl, lb, row);
-    pvpUpdateLeaderboard();
+    const row = el('div','btn-row'); row.append(menuBtn);
+    ov.append(row);
     return;
   }
 
@@ -1843,6 +1916,8 @@ function generateRoomCode() {
 function pvpCleanup() {
   if (st.pvpPeer) { try { st.pvpPeer.destroy(); } catch(e) {} st.pvpPeer = null; }
   st.pvpConns=[]; st.pvpPlayers=[]; st.pvpCode=null; st.pvpRole=null; st.pvpResults=[];
+  st.pvpTimeLimit=0; st.pvpHints=3; st.pvpMaxMistakes=3; st.pvpHintsUsed=0;
+  st.pvpLockedOut=false; st.pvpFinished=false; st.pvpGameOverSent=false;
 }
 
 function goPvpChoice() {
@@ -1891,6 +1966,41 @@ function pvpHost() {
     picker.append(card);
   });
 
+  // Build settings pills (time limit, hints, mistakes)
+  const existingSettings = document.getElementById('pvpSettingsBox');
+  if (existingSettings) existingSettings.remove();
+  const settings = el('div','pvp-settings'); settings.id = 'pvpSettingsBox';
+  function makePills(labelText, options, defaultVal, onChange) {
+    const row = el('div','pvp-setting-row');
+    const lbl = el('span','pvp-setting-label'); lbl.textContent = labelText;
+    const pills = el('div','pvp-pills');
+    options.forEach(({label, val}) => {
+      const p = el('button','pvp-pill' + (val === defaultVal ? ' selected' : ''));
+      p.textContent = label;
+      p.addEventListener('click', () => {
+        pills.querySelectorAll('.pvp-pill').forEach(x => x.classList.remove('selected'));
+        p.classList.add('selected');
+        onChange(val);
+      });
+      pills.append(p);
+    });
+    row.append(lbl, pills); return row;
+  }
+  st.pvpTimeLimit = 0; st.pvpHints = 3; st.pvpMaxMistakes = 3;
+  settings.append(
+    makePills('Time Limit', [
+      {label:'None',val:0},{label:'5 min',val:300},{label:'10 min',val:600},
+      {label:'15 min',val:900},{label:'20 min',val:1200}
+    ], 0, v => st.pvpTimeLimit = v),
+    makePills('Hints', [
+      {label:'1',val:1},{label:'2',val:2},{label:'3',val:3}
+    ], 3, v => st.pvpHints = v),
+    makePills('Mistakes', [
+      {label:'1',val:1},{label:'2',val:2},{label:'3',val:3}
+    ], 3, v => st.pvpMaxMistakes = v)
+  );
+  $('pvpHostControls').insertBefore(settings, $('pvpDiffPicker'));
+
   st.pvpPlayers = [{peerId:'__host__', username:st.username, isHost:true}];
   pvpRenderPlayers();
   $('pvpPlayersList').style.display = '';
@@ -1926,11 +2036,10 @@ function pvpHostOnData(data, conn) {
     conn.send({type:'welcome', players:st.pvpPlayers});
     pvpBroadcast({type:'player_joined', player}, conn);
   } else if (data.type === 'finished') {
-    const result = {username:data.username, elapsed:data.elapsed, peerId:conn.peer};
+    const result = {username:data.username, elapsed:data.elapsed, score:data.score||0, finished:!!data.finished, peerId:conn.peer};
     st.pvpResults.push(result);
     pvpBroadcast({type:'result', result});
-    pvpUpdateLeaderboard();
-    pvpRenderPlayers();
+    pvpCheckGameOver();
   }
 }
 
@@ -1996,7 +2105,9 @@ function pvpJoinOnData(data) {
   } else if (data.type === 'start') {
     pvpStartGame(data);
   } else if (data.type === 'result') {
-    st.pvpResults.push(data.result); pvpUpdateLeaderboard(); pvpRenderPlayers();
+    st.pvpResults.push(data.result);
+  } else if (data.type === 'game_over') {
+    pvpShowFinalResult(data);
   }
 }
 
@@ -2020,7 +2131,10 @@ function pvpRenderPlayers() {
 function pvpHostStartGame() {
   const {puzzle,solution} = makePuzzle(st.pvpDiff);
   st.pvpResults = [];
-  const payload = {type:'start', puzzle, solution, difficulty:st.pvpDiff, players:st.pvpPlayers};
+  const payload = {
+    type:'start', puzzle, solution, difficulty:st.pvpDiff, players:st.pvpPlayers,
+    pvpTimeLimit:st.pvpTimeLimit, pvpHints:st.pvpHints, pvpMaxMistakes:st.pvpMaxMistakes
+  };
   pvpBroadcast(payload);
   pvpStartGame(payload);
 }
@@ -2029,7 +2143,11 @@ function pvpStartGame(data) {
   const {puzzle, solution} = data;
   if (data.players) st.pvpPlayers = data.players;
   st.gameMode='pvp'; st.difficulty=data.difficulty;
-  st.errors=0; st.lives=3; st.selected=null; st.noteMode=false;
+  st.pvpTimeLimit   = data.pvpTimeLimit   != null ? data.pvpTimeLimit   : 0;
+  st.pvpHints       = data.pvpHints       != null ? data.pvpHints       : 3;
+  st.pvpMaxMistakes = data.pvpMaxMistakes != null ? data.pvpMaxMistakes : 3;
+  st.pvpHintsUsed=0; st.pvpLockedOut=false; st.pvpFinished=false; st.pvpGameOverSent=false;
+  st.errors=0; st.lives=st.pvpMaxMistakes; st.selected=null; st.noteMode=false;
   st.solved=false; st.lost=false; st.paused=false; st.elapsed=0;
   st.regions=null; st.cages=null; st.arrows=null; st.pvpResults=[];
   st.puzzle=puzzle; st.solution=solution;
@@ -2037,33 +2155,74 @@ function pvpStartGame(data) {
     Array.from({length:9},(_,c)=>({value:puzzle[r][c]||0,given:puzzle[r][c]!==0,notes:new Set()}))
   );
   clearInterval(st.timerInterval);
-  showScreen('screen-game'); applyTheme(); playTrack('normal');
+  showScreen('screen-game'); applyTheme(); playTrack('pvp');
   hideAllOverlays(); $('btnNotes').classList.remove('active');
   renderAll(); startTimer();
 }
 
 function pvpOnFinished() {
-  const result = {username:st.username, elapsed:st.elapsed, peerId: st.pvpPeer ? st.pvpPeer.id : '__host__'};
-  if (st.pvpRole === 'host') {
+  st.pvpFinished = true;
+  pvpBroadcastResult(countPvpScore(), true);
+}
+
+function countPvpScore() {
+  let n=0;
+  if (!st.board) return 0;
+  for (let r=0;r<9;r++) for (let c=0;c<9;c++)
+    if (!st.board[r][c].given && st.board[r][c].value) n++;
+  return n;
+}
+
+function pvpBroadcastResult(score, finished) {
+  const result = {username:st.username, elapsed:st.elapsed, score, finished, peerId:st.pvpPeer?st.pvpPeer.id:'__host__'};
+  if (st.pvpRole==='host') {
     st.pvpResults.push(result);
     pvpBroadcast({type:'result', result});
+    pvpCheckGameOver();
   } else if (st.pvpConns[0]) {
-    try { st.pvpConns[0].send({type:'finished', username:st.username, elapsed:st.elapsed}); } catch(e) {}
+    try { st.pvpConns[0].send({type:'finished', ...result}); } catch(e) {}
     st.pvpResults.push(result);
   }
 }
 
-function pvpUpdateLeaderboard() {
-  const lb = document.getElementById('pvpLeaderboard');
-  if (!lb) return;
-  lb.innerHTML = '';
-  st.pvpResults.forEach((r, i) => {
-    const row = el('div','pvp-lb-row');
-    const rank = el('span','pvp-lb-rank'); rank.textContent = `#${i+1}`;
-    const name = el('span'); name.textContent = r.username;
-    const time = el('span','pvp-lb-time'); time.textContent = formatTime(r.elapsed);
-    row.append(rank, name, time); lb.append(row);
-  });
+function pvpCheckGameOver() {
+  if (st.pvpGameOverSent) return;
+  if (st.pvpResults.length >= st.pvpPlayers.length) {
+    st.pvpGameOverSent = true;
+    const winner = pvpDetermineWinner(st.pvpResults);
+    pvpBroadcast({type:'game_over', results:st.pvpResults, winner});
+    pvpShowFinalResult({results:st.pvpResults, winner});
+  }
+}
+
+function pvpDetermineWinner(results) {
+  const finishers = results.filter(r=>r.finished).sort((a,b)=>a.elapsed-b.elapsed);
+  if (finishers.length) return finishers[0].username;
+  return [...results].sort((a,b)=>b.score-a.score)[0]?.username || '';
+}
+
+function pvpLockOut() {
+  if (st.pvpLockedOut) return;
+  st.pvpLockedOut = true;
+  st.lost = true;
+  clearInterval(st.timerInterval);
+  pvpBroadcastResult(countPvpScore(), false);
+  buildResultOverlay('pvp-waiting', {reason:'locked'});
+  showOverlay('result');
+}
+
+function pvpTimeOut() {
+  if (st.pvpLockedOut || st.pvpFinished) return;
+  st.pvpLockedOut = true;
+  st.lost = true;
+  pvpBroadcastResult(countPvpScore(), false);
+  buildResultOverlay('pvp-waiting', {reason:'timeout'});
+  showOverlay('result');
+}
+
+function pvpShowFinalResult({results, winner}) {
+  buildResultOverlay('pvp-final', {winner, results});
+  showOverlay('result');
 }
 
 $('btnPauseMenu').addEventListener('click', () => {
@@ -2122,7 +2281,7 @@ function renderProgress() {
 }
 
 function renderLives() {
-  const max = st.gameMode==='challenge' ? 1 : 3;
+  const max = st.gameMode==='challenge' ? 1 : st.gameMode==='pvp' ? st.pvpMaxMistakes : 3;
   for (let i=0;i<3;i++) {
     const h = $(`h${i}`);
     h.style.display = i < max ? '' : 'none';
@@ -2256,11 +2415,17 @@ function inputNumber(n) {
     checkSolved();
   } else {
     st.errors++; st.lives--;
+    if (st.gameMode==='pvp' && st.pvpTimeLimit > 0) {
+      st.elapsed = Math.min(st.elapsed + 15, st.pvpTimeLimit);
+    }
     renderLives();
     flashCell(r,c,'err-flash');
     if (st.lives <= 0) {
-      // Trigger loss after the flash is visible — don't let persistGame block this
-      setTimeout(() => triggerLoss('errors'), 350);
+      if (st.gameMode==='pvp') {
+        setTimeout(() => pvpLockOut(), 350);
+      } else {
+        setTimeout(() => triggerLoss('errors'), 350);
+      }
     } else {
       persistGame();
     }
@@ -2288,6 +2453,8 @@ function eraseCell() {
 
 function giveHint() {
   if (st.solved||st.lost||st.paused||!st.board) return;
+  if (st.gameMode==='pvp' && st.pvpHintsUsed >= st.pvpHints) return;
+  if (st.gameMode==='pvp') st.pvpHintsUsed++;
   const emp=[];
   for (let r=0;r<9;r++) for (let c=0;c<9;c++)
     if (!st.board[r][c].given&&!st.board[r][c].value) emp.push([r,c]);
@@ -2309,10 +2476,10 @@ function checkSolved() {
   clearInterval(st.timerInterval);
   _forget(SAVE_KEY);
 
-  // PvP win — separate handling
+  // PvP win — show waiting overlay; host will broadcast game_over when all results are in
   if (st.gameMode === 'pvp') {
     pvpOnFinished();
-    buildResultOverlay('pvp-win', {elapsed: st.elapsed});
+    buildResultOverlay('pvp-waiting', {reason:'finished'});
     showOverlay('result');
     return;
   }
