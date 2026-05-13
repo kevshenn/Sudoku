@@ -827,6 +827,44 @@
     }
     .bomb-flash { animation: bombFade 0.65s ease-in-out forwards; }
 
+    .pvp-squid-btn {
+      padding: 0.55rem 2rem;
+      border: none; border-radius: 999px;
+      background: #4a1a6e; color: #fff;
+      font-size: 0.9rem; font-weight: 700; font-family: inherit;
+      cursor: pointer; letter-spacing: 0.03em;
+      transition: opacity 0.2s, background 0.2s;
+    }
+    .pvp-squid-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+    .pvp-squid-btn:not(:disabled):hover { background: #361055; }
+
+    /* Ink splat overlay — purely visual, number still counts mechanically */
+    .ink-splat {
+      position: absolute; inset: 2px; z-index: 5; pointer-events: none;
+      background: #120e1e;
+      border-radius: 42% 58% 65% 35% / 48% 38% 62% 52%;
+    }
+    .ink-splat::before, .ink-splat::after {
+      content: ''; position: absolute; background: #120e1e; border-radius: 50%;
+    }
+    .ink-splat::before { top: -7px; right: 6px; width: 11px; height: 9px; }
+    .ink-splat::after  { bottom: -6px; left: 9px; width: 9px; height: 7px; }
+
+    /* PvP info / rules screen */
+    #screen-pvp-info { padding: 2.5rem 1.5rem 3rem; justify-content: flex-start; }
+    #screen-pvp-info h1 { font-size: 1.9rem; font-weight: 300; letter-spacing: 0.2em; text-transform: uppercase; margin-bottom: 0.3rem; }
+    .pvp-info-list { width: 100%; max-width: 400px; display: flex; flex-direction: column; gap: 0.75rem; margin: 1.2rem 0 1.5rem; }
+    .pvp-info-item { display: flex; align-items: center; gap: 0.85rem; background: var(--surface); border: 1.5px solid var(--border); border-radius: 12px; padding: 0.75rem 1rem; }
+    .pvp-info-icon { font-size: 1.35rem; flex-shrink: 0; width: 2rem; text-align: center; line-height: 1; }
+    .pvp-info-item > div { display: flex; flex-direction: column; justify-content: center; }
+    .pvp-info-item strong { display: inline; font-size: 0.87rem; color: var(--text); }
+    .pvp-info-optional { font-size: 0.76rem; color: var(--muted); }
+    .pvp-info-item > div > strong, .pvp-info-item > div > .pvp-info-optional { display: inline; }
+    .pvp-info-item > div > p { margin-top: 0.18rem; }
+    .pvp-info-item p { margin: 0; font-size: 0.76rem; color: var(--muted); line-height: 1.45; }
+    .pvp-info-play-btn { background: #ffb347; color: #4a1a00; border: none; border-radius: 999px; padding: 0.6rem 2rem; font-size: 0.95rem; font-weight: 700; font-family: inherit; cursor: pointer; transition: opacity 0.15s; }
+    .pvp-info-play-btn:hover { opacity: 0.85; }
+
     #fireworksCanvas {
       position: fixed;
       top: 0; left: 0;
@@ -940,6 +978,32 @@
     </div>
   </div>
   <button class="change-name-btn" id="btnSpecialBack">← Back to Menu</button>
+</div>
+
+<!-- ══ SCREEN 2c-ii · PvP Info ══ -->
+<div id="screen-pvp-info" class="screen" style="display:none">
+  <h1>PvP Mode</h1>
+  <p class="tagline">how it works</p>
+  <div class="pvp-info-list">
+    <div class="pvp-info-item">
+      <span class="pvp-info-icon">🏁</span>
+      <div><strong>Race to the finish</strong><p>Both players get the same puzzle. First to complete it wins. If time runs out, most cells filled wins.</p></div>
+    </div>
+    <div class="pvp-info-item">
+      <span class="pvp-info-icon">🎛</span>
+      <div><strong>Host sets the rules</strong><p>The host picks the time limit, hints allowed, and mistakes allowed before the game starts.</p></div>
+    </div>
+    <div class="pvp-info-item">
+      <span class="pvp-info-icon">💣</span>
+      <div><strong>Bomb</strong> <span class="pvp-info-optional">(optional)</span><p>Unlocks at 90s. Costs you 30s. Blanks 3 random filled cells on your opponent's board — including given numbers. They can refill them.</p></div>
+    </div>
+    <div class="pvp-info-item">
+      <span class="pvp-info-icon">🦑</span>
+      <div><strong>Squid</strong> <span class="pvp-info-optional">(optional)</span><p>Unlocks at 90s. Costs you 45s. Covers 3 filled cells with ink — the numbers are still there but your opponent can't see them!</p></div>
+    </div>
+  </div>
+  <button class="pvp-info-play-btn" id="btnPvpInfoPlay">Let's Play →</button>
+  <button class="change-name-btn" id="btnPvpInfoBack" style="margin-top:0.75rem">← Back</button>
 </div>
 
 <!-- ══ SCREEN 2d · PvP Choice ══ -->
@@ -1062,7 +1126,8 @@
     <button class="tool-btn" id="btnErase">⌫ erase</button>
     <button class="tool-btn" id="btnNotes">✎ notes</button>
     <button class="tool-btn" id="btnHint">⚡ hint</button>
-    <button class="pvp-bomb-btn" id="pvpBombBtn" style="display:none" disabled>💣 Bomb (30s)</button>
+    <button class="pvp-bomb-btn"  id="pvpBombBtn"  style="display:none" disabled>💣 Bomb (90s)</button>
+    <button class="pvp-squid-btn" id="pvpSquidBtn" style="display:none" disabled>🦑 Squid (90s)</button>
     <button class="tool-btn" id="btnNew">↺ new</button>
   </div>
 
@@ -1509,12 +1574,15 @@ const st = {
   pvpGameOverSent: false,
   pvpBombEnabled:  false,
   pvpBombUsed:     false,
+  pvpSquidEnabled: false,
+  pvpSquidUsed:    false,
+  pvpInkedCells:   [],
 };
 
 // ─── Screen switching ─────────────────────────────────────────────────────────
 
 function showScreen(id) {
-  ['screen-username','screen-menu','screen-difficulty','screen-special','screen-pvp','screen-pvp-room','screen-game'].forEach(s =>
+  ['screen-username','screen-menu','screen-difficulty','screen-special','screen-pvp-info','screen-pvp','screen-pvp-room','screen-game'].forEach(s =>
     $(s).style.display = s===id ? 'flex' : 'none'
   );
 }
@@ -1669,7 +1737,9 @@ $('btnJigsaw').addEventListener('click', ()=>showDifficultyPicker('jigsaw'));
 $('btnKiller').addEventListener('click', ()=>showDifficultyPicker('killer'));
 $('btnArrow').addEventListener('click',  ()=>showDifficultyPicker('arrow'));
 
-$('btnPlayPvp').addEventListener('click', goPvpChoice);
+$('btnPlayPvp').addEventListener('click', () => showScreen('screen-pvp-info'));
+$('btnPvpInfoPlay').addEventListener('click', goPvpChoice);
+$('btnPvpInfoBack').addEventListener('click', goMenu);
 $('btnPvpBack').addEventListener('click', goMenu);
 $('btnPvpHost').addEventListener('click', () => goPvpRoom('host'));
 $('btnPvpJoin').addEventListener('click', () => goPvpRoom('join'));
@@ -1682,6 +1752,7 @@ $('pvpCodeInput').addEventListener('input', () => {
 $('btnPvpStart').addEventListener('click', pvpHostStartGame);
 $('btnPvpRoomBack').addEventListener('click', () => { pvpCleanup(); showScreen('screen-pvp'); });
 $('pvpBombBtn').addEventListener('click', pvpUseBomb);
+$('pvpSquidBtn').addEventListener('click', pvpUseSquid);
 
 $('btnPlayChallenge').addEventListener('click', () => {
   st.gameMode   = 'challenge';
@@ -1772,12 +1843,16 @@ function tickTimer() {
     if (rem <= 0) { st.elapsed = st.pvpTimeLimit; renderTimer(); pvpTimeOut(); return; }
   }
   renderTimer();
-  if (st.gameMode==='pvp' && st.pvpBombEnabled && !st.pvpBombUsed) {
-    const btn = $('pvpBombBtn');
-    if (st.elapsed >= 30) {
-      btn.disabled = false; btn.textContent = '💣 Bomb';
-    } else {
-      btn.disabled = true; btn.textContent = `💣 Bomb (${30 - st.elapsed}s)`;
+  if (st.gameMode==='pvp') {
+    if (st.pvpBombEnabled && !st.pvpBombUsed) {
+      const btn = $('pvpBombBtn');
+      if (st.elapsed >= 90) { btn.disabled=false; btn.textContent='💣 Bomb'; }
+      else { btn.disabled=true; btn.textContent=`💣 Bomb (${90-st.elapsed}s)`; }
+    }
+    if (st.pvpSquidEnabled && !st.pvpSquidUsed) {
+      const btn = $('pvpSquidBtn');
+      if (st.elapsed >= 90) { btn.disabled=false; btn.textContent='🦑 Squid'; }
+      else { btn.disabled=true; btn.textContent=`🦑 Squid (${90-st.elapsed}s)`; }
     }
   }
 }
@@ -1987,7 +2062,9 @@ function pvpCleanup() {
   st.pvpTimeLimit=0; st.pvpHints=3; st.pvpMaxMistakes=3; st.pvpHintsUsed=0;
   st.pvpLockedOut=false; st.pvpFinished=false; st.pvpGameOverSent=false;
   st.pvpBombEnabled=false; st.pvpBombUsed=false;
+  st.pvpSquidEnabled=false; st.pvpSquidUsed=false; st.pvpInkedCells=[];
   $('pvpBombBtn').style.display='none';
+  $('pvpSquidBtn').style.display='none';
 }
 
 function goPvpChoice() {
@@ -2056,7 +2133,7 @@ function pvpHost() {
     });
     row.append(lbl, pills); return row;
   }
-  st.pvpTimeLimit = 0; st.pvpHints = 3; st.pvpMaxMistakes = 3; st.pvpBombEnabled = false;
+  st.pvpTimeLimit = 0; st.pvpHints = 3; st.pvpMaxMistakes = 3; st.pvpBombEnabled = false; st.pvpSquidEnabled = false;
   settings.append(
     makePills('Time Limit', [
       {label:'None',val:0},{label:'5 min',val:300},{label:'10 min',val:600},
@@ -2070,7 +2147,10 @@ function pvpHost() {
     ], 3, v => st.pvpMaxMistakes = v),
     makePills('Bomb', [
       {label:'Off',val:false},{label:'On',val:true}
-    ], false, v => st.pvpBombEnabled = v)
+    ], false, v => st.pvpBombEnabled = v),
+    makePills('Squid', [
+      {label:'Off',val:false},{label:'On',val:true}
+    ], false, v => st.pvpSquidEnabled = v)
   );
   $('pvpHostControls').insertBefore(settings, $('pvpDiffPicker'));
 
@@ -2116,6 +2196,9 @@ function pvpHostOnData(data, conn) {
   } else if (data.type === 'bomb') {
     pvpReceiveBomb(data.username);
     pvpBroadcast({type:'bomb', username:data.username}, conn);
+  } else if (data.type === 'squid') {
+    pvpReceiveSquid(data.username);
+    pvpBroadcast({type:'squid', username:data.username}, conn);
   }
 }
 
@@ -2184,6 +2267,8 @@ function pvpJoinOnData(data) {
     st.pvpResults.push(data.result);
   } else if (data.type === 'bomb') {
     pvpReceiveBomb(data.username);
+  } else if (data.type === 'squid') {
+    pvpReceiveSquid(data.username);
   } else if (data.type === 'game_over') {
     pvpShowFinalResult(data);
   }
@@ -2212,7 +2297,7 @@ function pvpHostStartGame() {
   const payload = {
     type:'start', puzzle, solution, difficulty:st.pvpDiff, players:st.pvpPlayers,
     pvpTimeLimit:st.pvpTimeLimit, pvpHints:st.pvpHints, pvpMaxMistakes:st.pvpMaxMistakes,
-    pvpBombEnabled:st.pvpBombEnabled
+    pvpBombEnabled:st.pvpBombEnabled, pvpSquidEnabled:st.pvpSquidEnabled
   };
   pvpBroadcast(payload);
   pvpStartGame(payload);
@@ -2225,8 +2310,11 @@ function pvpStartGame(data) {
   st.pvpTimeLimit   = data.pvpTimeLimit   != null ? data.pvpTimeLimit   : 0;
   st.pvpHints       = data.pvpHints       != null ? data.pvpHints       : 3;
   st.pvpMaxMistakes = data.pvpMaxMistakes != null ? data.pvpMaxMistakes : 3;
-  st.pvpBombEnabled = !!data.pvpBombEnabled;
-  st.pvpBombUsed = false;
+  st.pvpBombEnabled  = !!data.pvpBombEnabled;
+  st.pvpBombUsed     = false;
+  st.pvpSquidEnabled = !!data.pvpSquidEnabled;
+  st.pvpSquidUsed    = false;
+  st.pvpInkedCells   = [];
   st.pvpHintsUsed=0; st.pvpLockedOut=false; st.pvpFinished=false; st.pvpGameOverSent=false;
   st.errors=0; st.lives=st.pvpMaxMistakes; st.selected=null; st.noteMode=false;
   st.solved=false; st.lost=false; st.paused=false; st.elapsed=0;
@@ -2241,8 +2329,10 @@ function pvpStartGame(data) {
   renderAll(); startTimer();
   const bombBtn = $('pvpBombBtn');
   bombBtn.style.display = st.pvpBombEnabled ? 'inline-block' : 'none';
-  bombBtn.disabled = true;
-  bombBtn.textContent = '💣 Bomb (30s)';
+  bombBtn.disabled = true; bombBtn.textContent = '💣 Bomb (90s)';
+  const squidBtn = $('pvpSquidBtn');
+  squidBtn.style.display = st.pvpSquidEnabled ? 'inline-block' : 'none';
+  squidBtn.disabled = true; squidBtn.textContent = '🦑 Squid (90s)';
 }
 
 function pvpOnFinished() {
@@ -2299,7 +2389,7 @@ function pvpLockOut() {
 }
 
 function pvpUseBomb() {
-  if (!st.pvpBombEnabled || st.pvpBombUsed || st.elapsed < 30 || st.solved || st.lost) return;
+  if (!st.pvpBombEnabled || st.pvpBombUsed || st.elapsed < 90 || st.solved || st.lost) return;
   st.pvpBombUsed = true;
   // Bomber loses 30s
   st.elapsed += 30;
@@ -2311,6 +2401,67 @@ function pvpUseBomb() {
   const msg = {type:'bomb', username:st.username};
   if (st.pvpRole==='host') pvpBroadcast(msg);
   else if (st.pvpConns[0]) try { st.pvpConns[0].send(msg); } catch(e) {}
+}
+
+function pvpUseSquid() {
+  if (!st.pvpSquidEnabled || st.pvpSquidUsed || st.elapsed < 90 || st.solved || st.lost) return;
+  st.pvpSquidUsed = true;
+  st.elapsed += 45;
+  if (st.pvpTimeLimit > 0) st.elapsed = Math.min(st.elapsed, st.pvpTimeLimit);
+  renderTimer();
+  const btn = $('pvpSquidBtn');
+  btn.disabled = true; btn.textContent = '🦑 Used';
+  const msg = {type:'squid', username:st.username};
+  if (st.pvpRole==='host') pvpBroadcast(msg);
+  else if (st.pvpConns[0]) try { st.pvpConns[0].send(msg); } catch(e) {}
+}
+
+function pvpReceiveSquid(fromUsername) {
+  playSquidSound();
+  const notif = $('bombNotification');
+  notif.textContent = `🦑 ${fromUsername} has inked you!`;
+  notif.classList.add('visible');
+  setTimeout(() => notif.classList.remove('visible'), 3000);
+  if (!st.board) return;
+  // Pick 3 random filled cells not already inked
+  const candidates = [];
+  for (let r=0;r<9;r++) for (let c=0;c<9;c++)
+    if (st.board[r][c].value && !st.pvpInkedCells.some(([ir,ic])=>ir===r&&ic===c))
+      candidates.push([r,c]);
+  for (let i=candidates.length-1;i>0;i--) {
+    const j=Math.floor(Math.random()*(i+1)); [candidates[i],candidates[j]]=[candidates[j],candidates[i]];
+  }
+  candidates.slice(0,3).forEach(([r,c]) => st.pvpInkedCells.push([r,c]));
+  renderBoard();
+}
+
+function playSquidSound() {
+  try {
+    const ac = new (window.AudioContext || window.webkitAudioContext)();
+    // Wet squelch: bandpass-filtered noise sweep
+    const bufSize = Math.floor(ac.sampleRate * 0.22);
+    const buf = ac.createBuffer(1, bufSize, ac.sampleRate);
+    const data = buf.getChannelData(0);
+    for (let i=0;i<bufSize;i++) data[i] = (Math.random()*2-1) * Math.pow(1-i/bufSize, 0.4);
+    const noise = ac.createBufferSource(); noise.buffer = buf;
+    const filt = ac.createBiquadFilter(); filt.type='bandpass'; filt.Q.value=3;
+    filt.frequency.setValueAtTime(900, ac.currentTime);
+    filt.frequency.exponentialRampToValueAtTime(180, ac.currentTime + 0.2);
+    const gain = ac.createGain();
+    gain.gain.setValueAtTime(0.55, ac.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.22);
+    noise.connect(filt); filt.connect(gain); gain.connect(ac.destination);
+    noise.start(); noise.stop(ac.currentTime + 0.22);
+    // Wet plop tone
+    const osc = ac.createOscillator(); osc.type='sine';
+    const og = ac.createGain();
+    osc.frequency.setValueAtTime(350, ac.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(90, ac.currentTime + 0.18);
+    og.gain.setValueAtTime(0.35, ac.currentTime);
+    og.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + 0.18);
+    osc.connect(og); og.connect(ac.destination);
+    osc.start(); osc.stop(ac.currentTime + 0.18);
+  } catch(e) {}
 }
 
 function playBombSound() {
@@ -2352,7 +2503,7 @@ function pvpReceiveBomb(fromUsername) {
   if (!st.board) return;
   const filled = [];
   for (let r=0;r<9;r++) for (let c=0;c<9;c++)
-    if (!st.board[r][c].given && st.board[r][c].value) filled.push([r,c]);
+    if (st.board[r][c].value) filled.push([r,c]);
   for (let i=filled.length-1;i>0;i--) {
     const j=Math.floor(Math.random()*(i+1)); [filled[i],filled[j]]=[filled[j],filled[i]];
   }
@@ -2360,7 +2511,7 @@ function pvpReceiveBomb(fromUsername) {
     const cellEl = $('board').children[r*9+c];
     if (cellEl) cellEl.classList.add('bomb-flash');
     setTimeout(() => {
-      st.board[r][c].value=0; st.board[r][c].notes.clear();
+      st.board[r][c].value=0; st.board[r][c].given=false; st.board[r][c].notes.clear();
       renderBoard(); renderNumpad();
     }, 650);
   });
@@ -2432,6 +2583,9 @@ function renderDiffBar() {
 }
 
 function renderProgress() {
+  const isPvp = st.gameMode==='pvp';
+  document.querySelector('.progress-row').style.display = isPvp ? 'none' : '';
+  if (isPvp) return;
   const mode = st.gameMode||'normal';
   const req  = WINS_REQUIRED[mode];
   const wins = getWins(mode, st.difficulty);
@@ -2489,6 +2643,11 @@ function renderBoard() {
       const n=el('div','notes');
       for (let i=1;i<=9;i++){const s=el('span');s.textContent=cd.notes.has(i)?i:'';n.append(s);}
       cell.append(n);
+    }
+
+    // Ink splat (squid — visual only, number still counts mechanically)
+    if (cd.value && st.pvpInkedCells && st.pvpInkedCells.some(([ir,ic])=>ir===r&&ic===c)) {
+      cell.append(el('div','ink-splat'));
     }
 
     // Selection highlight
