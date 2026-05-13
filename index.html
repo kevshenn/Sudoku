@@ -783,8 +783,6 @@
     }
 
     .pvp-bomb-btn {
-      display: none;
-      margin-top: 0.6rem;
       padding: 0.55rem 2rem;
       border: none;
       border-radius: 999px;
@@ -1064,10 +1062,10 @@
     <button class="tool-btn" id="btnErase">⌫ erase</button>
     <button class="tool-btn" id="btnNotes">✎ notes</button>
     <button class="tool-btn" id="btnHint">⚡ hint</button>
+    <button class="pvp-bomb-btn" id="pvpBombBtn" style="display:none" disabled>💣 Bomb (30s)</button>
     <button class="tool-btn" id="btnNew">↺ new</button>
   </div>
 
-  <button class="pvp-bomb-btn" id="pvpBombBtn" disabled>💣 Bomb (30s)</button>
   <div class="bomb-notification" id="bombNotification"></div>
 
 </div>
@@ -2242,7 +2240,7 @@ function pvpStartGame(data) {
   hideAllOverlays(); $('btnNotes').classList.remove('active');
   renderAll(); startTimer();
   const bombBtn = $('pvpBombBtn');
-  bombBtn.style.display = st.pvpBombEnabled ? '' : 'none';
+  bombBtn.style.display = st.pvpBombEnabled ? 'inline-block' : 'none';
   bombBtn.disabled = true;
   bombBtn.textContent = '💣 Bomb (30s)';
 }
