@@ -2176,6 +2176,8 @@ function pvpHost() {
         st.pvpPlayers = st.pvpPlayers.filter(p => p.peerId !== conn.peer);
         pvpRenderPlayers(); pvpRefreshStartBtn();
         pvpBroadcast({type:'player_left', peerId:conn.peer});
+        // If a game is in progress, a disconnected player counts as done — re-check.
+        if (st.gameMode === 'pvp' && st.board) pvpCheckGameOver();
       });
     });
   });
@@ -2524,6 +2526,17 @@ function pvpTimeOut() {
   pvpBroadcastResult(countPvpScore(), false);
   buildResultOverlay('pvp-waiting', {reason:'timeout'});
   showOverlay('result');
+  // Host: all players share the same time limit and started at the same moment,
+  // so when the host's timer fires every player's timer has also fired.
+  // Synthesise a result for anyone whose message hasn't arrived yet, then end.
+  if (st.pvpRole === 'host') {
+    st.pvpPlayers.forEach(p => {
+      if (!st.pvpResults.find(r => r.username === p.username)) {
+        st.pvpResults.push({username:p.username, elapsed:st.pvpTimeLimit, score:0, finished:false, peerId:''});
+      }
+    });
+    pvpCheckGameOver();
+  }
 }
 
 function pvpShowFinalResult({results, winner}) {
